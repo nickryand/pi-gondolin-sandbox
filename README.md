@@ -31,7 +31,7 @@ To ensure the AI agent remains "aware" of its environment, the extension:
 
 ## Project settings
 
-Create a JSON `.gondolin.json` file in the project directory to set the VM image tag and add more RealFS mounts:
+Create a JSON `.gondolin.json` file in the project directory to set the VM image tag, add more RealFS mounts, and configure limited network access:
 
 ```json
 {
@@ -50,6 +50,14 @@ Create a JSON `.gondolin.json` file in the project directory to set the VM image
         "readOnly": false
       }
     }
+  },
+  "network": {
+    "allowHosts": ["api.github.com", "*.npmjs.org"],
+    "tcpMap": {
+      "postgres.local:5432": "127.0.0.1:5432",
+      "redis.local": "127.0.0.1:6379"
+    },
+    "panel": false
   }
 }
 ```
@@ -58,10 +66,13 @@ Use `image.tag` (or top-level `imageTag`) to select the Gondolin image for the s
 
 Mount keys are absolute guest paths. Values may be a host path string or an object with `path`, `hostPath`, or `root`. Relative host paths are resolved from the project directory. All other fields, plus nested `options`, are passed through to Gondolin's `RealFSProvider` options.
 
+`network.allowHosts` mirrors Gondolin's `--allow-host` HTTP policy. Omit it to leave HTTP unrestricted, or set it to an empty array to deny all HTTP hosts. `network.tcpMap` mirrors Gondolin's `--tcp-map` and maps guest `HOST[:PORT]` names to upstream `HOST:PORT` endpoints; TCP mapping automatically enables synthetic per-host DNS inside Gondolin. Set `network.panel` to `true` to show the network event panel automatically at session start, or leave it `false` and toggle it manually.
+
 ## Commands
 
 * `/gondolin build` force-builds the configured image from `Gondolinfile`. If the VM is running, reload it afterwards with `/gondolin reload`.
-* `/gondolin reload` stops the current VM and starts it again, ensuring the configured image is current first.
+* `/gondolin reload` re-reads `.gondolin.json`, stops the current VM, and starts it again with the updated image, mount, and network settings.
+* `/gondolin panel` toggles a right-side overlay with recent HTTP allow-host and TCP map allow/deny events.
 
 Add `.gondolin/` to your project `.gitignore` to ignore the build metadata cache.
 

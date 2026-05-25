@@ -31,10 +31,18 @@ export interface GondolinImageSettings {
   [key: string]: unknown;
 }
 
+export interface GondolinNetworkSettings {
+  allowHosts?: string[];
+  tcpMap?: Record<string, string>;
+  panel?: boolean;
+  [key: string]: unknown;
+}
+
 export interface GondolinSettings {
   mounts: Record<string, string | GondolinMountSpec>;
   imageTag?: string;
   image?: GondolinImageSettings;
+  network?: GondolinNetworkSettings;
   [key: string]: unknown;
 }
 
@@ -75,10 +83,60 @@ export function loadGondolinSettings(
     throw new Error(`${settingsPath} field "mounts" must be an object`);
   }
 
+  const network = parsed.network;
+  if (network !== undefined && !isPlainObject(network)) {
+    throw new Error(`${settingsPath} field "network" must be an object`);
+  }
+
   return {
     ...parsed,
     mounts: mounts as Record<string, string | GondolinMountSpec>,
+    ...(network !== undefined
+      ? { network: normalizeNetworkSettings(network, settingsPath) }
+      : {}),
   };
+}
+
+function normalizeNetworkSettings(
+  network: Record<string, unknown>,
+  settingsPath: string,
+): GondolinNetworkSettings {
+  const normalized: GondolinNetworkSettings = { ...network };
+
+  if (network.allowHosts !== undefined) {
+    if (!Array.isArray(network.allowHosts)) {
+      throw new Error(`${settingsPath} field "network.allowHosts" must be an array`);
+    }
+    normalized.allowHosts = network.allowHosts.map((host, i) => {
+      if (typeof host !== "string" || host.length === 0) {
+        throw new Error(
+          `${settingsPath} field "network.allowHosts[${i}]" must be a non-empty string`,
+        );
+      }
+      return host;
+    });
+  }
+
+  if (network.tcpMap !== undefined) {
+    if (!isPlainObject(network.tcpMap)) {
+      throw new Error(`${settingsPath} field "network.tcpMap" must be an object`);
+    }
+    normalized.tcpMap = {};
+    for (const [guest, upstream] of Object.entries(network.tcpMap)) {
+      if (typeof upstream !== "string" || upstream.length === 0) {
+        throw new Error(
+          `${settingsPath} field "network.tcpMap.${guest}" must be a non-empty string`,
+        );
+      }
+      normalized.tcpMap[guest] = upstream;
+    }
+  }
+
+  if (network.panel !== undefined && typeof network.panel !== "boolean") {
+    throw new Error(`${settingsPath} field "network.panel" must be a boolean`);
+  }
+
+  return normalized;
 }
 
 export function getGondolinImageTag(settings: GondolinSettings): string | undefined {
