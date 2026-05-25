@@ -73,9 +73,43 @@ Add `.gondolin/` to your project `.gitignore` to ignore the build metadata cache
 
 ## Usage
 
-To run `pi` using this extension:
+Install the package from pi configuration (global or project-local):
+
+```bash
+pi install /absolute/path/to/pi-gondolin
+# or, from a project, write to .pi/settings.json:
+pi install -l /absolute/path/to/pi-gondolin
+```
+
+This works because `package.json` declares the conventional extension tree under `pi.extensions`:
+
+```text
+pi-gondolin/
+├── package.json
+├── extensions/
+│   └── pi-gondolin/
+│       └── index.ts
+└── ...
+```
+
+Equivalent settings JSON:
+
+```json
+{
+  "packages": ["/absolute/path/to/pi-gondolin"]
+}
+```
+
+Then start pi in the project you want to sandbox:
 
 ```bash
 cd /path/to/your/project
-pi -e /absolute/path/to/gondolin/host/examples/pi-gondolin.ts
+pi
+```
+
+You can also test it without installing by passing the package directory directly:
+
+```bash
+cd /path/to/your/project
+pi -e /absolute/path/to/pi-gondolin
 ```

@@ -28,9 +28,16 @@
  *   1. Install dependencies for this repo (so imports resolve):
  *        pnpm install
  *   2. Ensure QEMU is installed (see the gondolin README "Quick Start")
- *   3. Start pi in the project you want to sandbox:
+ *   3. Install this package in pi configuration:
+ *        pi install /absolute/path/to/pi-gondolin
+ *      or project-local:
+ *        pi install -l /absolute/path/to/pi-gondolin
+ *   4. Start pi in the project you want to sandbox:
  *        cd /path/to/your/project
- *        pi -e /absolute/path/to/gondolin/host/examples/pi-gondolin.ts
+ *        pi
+ *
+ *      For quick testing without installing, use:
+ *        pi -e /absolute/path/to/pi-gondolin
  *
  * Notes:
  *   - The VM is started on `session_start` (and lazily if a tool is used before that)
