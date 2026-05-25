@@ -1,0 +1,11 @@
+{
+  "image": {
+    "tag": "pi-sandbox:latest"
+  },
+  "mounts": {
+    "/workspace/test": {
+      "path": "../",
+      "readOnly": true
+    }
+  }
+}

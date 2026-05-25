@@ -1,0 +1,44 @@
+{
+  "arch": "x86_64",
+  "distro": "alpine",
+  "alpine": {
+    "version": "3.23.0",
+    "kernelPackage": "linux-virt",
+    "kernelImage": "vmlinuz-virt",
+    "rootfsPackages": [
+      "linux-virt",
+      "rng-tools",
+      "bash",
+      "ca-certificates",
+      "curl",
+      "e2fsprogs",
+      "nodejs",
+      "npm",
+      "uv",
+      "python3",
+      "openssh",
+      "rustup",
+      "jujutsu",
+      "ripgrep"
+    ],
+    "initramfsPackages": [],
+    "krunfwVersion": "v5.2.1"
+  },
+  "rootfs": {
+    "label": "gondolin-test",
+    "sizeMb": 4096
+  },
+  "postBuild": {
+    "commands": [
+      "export RUSTUP_HOME=/usr/local/rustup CARGO_HOME=/usr/local/cargo PATH=/usr/local/cargo/bin:$PATH; rustup-init -y --no-modify-path --default-toolchain stable; chmod -R a+rX /usr/local/rustup /usr/local/cargo"
+    ]
+  },
+  "env": {
+    "RUSTUP_HOME": "/usr/local/rustup",
+    "CARGO_HOME": "/usr/local/cargo",
+    "PATH": "/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  },
+  "container": {
+    "force": true
+  }
+}
