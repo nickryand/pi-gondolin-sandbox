@@ -31,10 +31,16 @@ export interface GondolinImageSettings {
   [key: string]: unknown;
 }
 
+export interface GondolinNetworkPanelSettings {
+  enabled?: boolean;
+  expandShortcut?: string;
+  [key: string]: unknown;
+}
+
 export interface GondolinNetworkSettings {
   allowHosts?: string[];
   tcpMap?: Record<string, string>;
-  panel?: boolean;
+  panel?: boolean | GondolinNetworkPanelSettings;
   [key: string]: unknown;
 }
 
@@ -132,8 +138,25 @@ function normalizeNetworkSettings(
     }
   }
 
-  if (network.panel !== undefined && typeof network.panel !== "boolean") {
-    throw new Error(`${settingsPath} field "network.panel" must be a boolean`);
+  if (network.panel !== undefined) {
+    if (typeof network.panel === "boolean") {
+      normalized.panel = network.panel;
+    } else if (isPlainObject(network.panel)) {
+      const panel = network.panel;
+      if (panel.enabled !== undefined && typeof panel.enabled !== "boolean") {
+        throw new Error(`${settingsPath} field "network.panel.enabled" must be a boolean`);
+      }
+      if (panel.expandShortcut !== undefined) {
+        if (typeof panel.expandShortcut !== "string" || panel.expandShortcut.length === 0) {
+          throw new Error(
+            `${settingsPath} field "network.panel.expandShortcut" must be a non-empty string`,
+          );
+        }
+      }
+      normalized.panel = panel;
+    } else {
+      throw new Error(`${settingsPath} field "network.panel" must be a boolean or object`);
+    }
   }
 
   return normalized;
