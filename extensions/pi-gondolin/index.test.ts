@@ -13,8 +13,11 @@
  */
 
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 
-import { toGuestPath } from "./index.ts";
+import activateGondolinExtension, { toGuestPath } from "./index.ts";
 
 const localCwd = "/example/pi-gondolin";
 
@@ -49,5 +52,60 @@ assert.throws(() => toGuestPath(localCwd, "/workspace2/file.txt"), {
 assert.throws(() => toGuestPath(localCwd, "../../shared/file.txt"), {
   message: "path escapes workspace: ../../shared/file.txt",
 });
+
+const initProjectDir = fs.mkdtempSync(path.join(os.tmpdir(), "gondolin-init-"));
+const previousCwd = process.cwd();
+let gondolinCommand:
+  | { handler: (args: string, ctx: any) => Promise<void> }
+  | undefined;
+const notifications: Array<{ message: string; level: string }> = [];
+
+try {
+  process.chdir(initProjectDir);
+  activateGondolinExtension({
+    registerCommand(name: string, command: typeof gondolinCommand) {
+      if (name === "gondolin") gondolinCommand = command;
+    },
+    registerShortcut() {},
+    on() {},
+    registerTool() {},
+  } as any);
+
+  await gondolinCommand?.handler("init", {
+    ui: {
+      notify(message: string, level: string) {
+        notifications.push({ message, level });
+      },
+    },
+  });
+} finally {
+  process.chdir(previousCwd);
+}
+
+assert.deepEqual(
+  JSON.parse(
+    fs.readFileSync(path.join(initProjectDir, ".gondolin.json"), "utf8"),
+  ),
+  {
+    image: { tag: "pi-sandbox:latest" },
+  },
+);
+assert.deepEqual(notifications, [
+  {
+    message: `Created .gondolin.json.\n\nExample .gondolin.json with optional mounts:\n{
+  "image": {
+    "tag": "pi-sandbox:latest"
+  },
+  "mounts": {
+    "/workspace/test": {
+      "path": "../",
+      "readOnly": true
+    }
+  }
+}
+`,
+    level: "info",
+  },
+]);
 
 console.log("index tests passed");

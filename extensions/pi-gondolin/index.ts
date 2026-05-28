@@ -46,6 +46,7 @@
  *     gondolin repo (or installing `@earendil-works/gondolin` next to it) is easiest
  */
 
+import fs from "node:fs";
 import path from "node:path";
 
 import {
@@ -58,6 +59,7 @@ import {
 
 import { ensureGondolinImage } from "./image.ts";
 import {
+  GONDOLIN_SETTINGS_JSON_FILE,
   getGondolinImageTag,
   loadGondolinSettings,
   normalizeMountSpecs,
@@ -824,6 +826,47 @@ export default function (pi: ExtensionAPI) {
     ctx?.ui.notify(`Gondolin image ${runtimeSettings.imageTag} built.`, "info");
   }
 
+  function initGondolinSettingsFromCommand(ctx?: ExtensionContext) {
+    const settingsPath = path.join(localCwd, GONDOLIN_SETTINGS_JSON_FILE);
+    const settingsJson = `{
+  "image": {
+    "tag": "pi-sandbox:latest"
+  }
+}
+`;
+    const exampleSettingsJson = `{
+  "image": {
+    "tag": "pi-sandbox:latest"
+  },
+  "mounts": {
+    "/workspace/test": {
+      "path": "../",
+      "readOnly": true
+    }
+  }
+}
+`;
+
+    try {
+      fs.writeFileSync(settingsPath, settingsJson, { flag: "wx" });
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === "EEXIST") {
+        ctx?.ui.notify(
+          `${GONDOLIN_SETTINGS_JSON_FILE} already exists.`,
+          "warning",
+        );
+        return;
+      }
+      throw err;
+    }
+
+    runtimeSettings = readRuntimeSettings();
+    ctx?.ui.notify(
+      `Created ${GONDOLIN_SETTINGS_JSON_FILE}.\n\nExample ${GONDOLIN_SETTINGS_JSON_FILE} with optional mounts:\n${exampleSettingsJson}`,
+      "info",
+    );
+  }
+
   function registerGondolinCommands() {
     const api = pi as any;
     const panelCommandUsage =
@@ -858,6 +901,9 @@ export default function (pi: ExtensionAPI) {
     };
     const run = async (args: string[], ctx?: ExtensionContext) => {
       switch (args[0]) {
+        case "init":
+          initGondolinSettingsFromCommand(ctx);
+          return;
         case "build":
           await buildImageFromCommand(ctx);
           return;
@@ -870,7 +916,7 @@ export default function (pi: ExtensionAPI) {
           return;
         default:
           ctx?.ui.notify(
-            "Usage: /gondolin build, /gondolin reload, or /gondolin panel [show|hide|toggle|expand|collapse|toggle-expanded]",
+            "Usage: /gondolin init, /gondolin build, /gondolin reload, or /gondolin panel [show|hide|toggle|expand|collapse|toggle-expanded]",
             "info",
           );
       }
@@ -884,9 +930,9 @@ export default function (pi: ExtensionAPI) {
     if (typeof api.registerCommand === "function") {
       api.registerCommand("gondolin", {
         description:
-          "Build/reload Gondolin or control network panel: /gondolin build|reload|panel",
+          "Initialize/build/reload Gondolin or control network panel: /gondolin init|build|reload|panel",
         getArgumentCompletions: (prefix: string) => {
-          const items = ["build", "reload", "panel"].map((value) => ({
+          const items = ["init", "build", "reload", "panel"].map((value) => ({
             value,
             label: value,
           }));
