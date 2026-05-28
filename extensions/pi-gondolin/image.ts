@@ -86,19 +86,6 @@ export function createGondolinImageBuildPlan(
   };
 }
 
-export async function gondolinImageExists(
-  imageTag: string,
-  sdk?: Pick<GondolinImageSdk, "resolveImageSelector">,
-): Promise<boolean> {
-  const activeSdk = sdk ?? (await loadGondolinSdk());
-  try {
-    activeSdk.resolveImageSelector(imageTag);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 export function loadGondolinfileConfig(
   gondolinfilePath: string,
   sdk: Pick<GondolinImageSdk, "parseBuildConfig">,

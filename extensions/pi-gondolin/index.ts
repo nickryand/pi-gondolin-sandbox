@@ -48,6 +48,14 @@
 
 import path from "node:path";
 
+import {
+  matchesKey,
+  truncateToWidth,
+  visibleWidth,
+  type Component,
+  type OverlayOptions,
+} from "@earendil-works/pi-tui";
+
 import { ensureGondolinImage } from "./image.ts";
 import {
   getGondolinImageTag,
@@ -70,11 +78,129 @@ import {
   type WriteOperations,
 } from "@earendil-works/pi-coding-agent";
 
-import Gondolin from "@earendil-works/gondolin";
+import * as Gondolin from "@earendil-works/gondolin";
 
-const { RealFSProvider, VM } = Gondolin;
+const GondolinSdk = ((Gondolin as any).default ?? Gondolin) as any;
+const { createHttpHooks, RealFSProvider, VM } = GondolinSdk;
+type GondolinVM = InstanceType<typeof VM>;
 
-const GUEST_WORKSPACE_ROOT = "/workspace";
+// The end '/' here is very important.
+const GUEST_WORKSPACE_ROOT = "/workspace/";
+const NETWORK_EVENT_LIMIT = 200;
+const DEFAULT_NETWORK_PANEL_EXPAND_SHORTCUT = "alt+m";
+
+type NetworkEventAction = "allow" | "deny";
+type NetworkEventKind = "http" | "tcp";
+
+interface NetworkEvent {
+  timestamp: Date;
+  kind: NetworkEventKind;
+  action: NetworkEventAction;
+  target: string;
+  detail?: string;
+}
+
+interface NetworkStats {
+  httpAllow: number;
+  httpDeny: number;
+  tcpAllow: number;
+  tcpDeny: number;
+}
+
+class GondolinNetworkPanel implements Component {
+  private readonly events: NetworkEvent[];
+  private readonly stats: NetworkStats;
+  private readonly getConfiguredText: () => string[];
+  private readonly theme: ExtensionContext["ui"]["theme"];
+  private readonly expanded: boolean;
+  private readonly expandShortcut: string;
+  private readonly onCollapse: () => void;
+
+  constructor(
+    events: NetworkEvent[],
+    stats: NetworkStats,
+    getConfiguredText: () => string[],
+    theme: ExtensionContext["ui"]["theme"],
+    expanded: boolean,
+    expandShortcut: string,
+    onCollapse: () => void,
+  ) {
+    this.events = events;
+    this.stats = stats;
+    this.getConfiguredText = getConfiguredText;
+    this.theme = theme;
+    this.expanded = expanded;
+    this.expandShortcut = expandShortcut;
+    this.onCollapse = onCollapse;
+  }
+
+  render(width: number): string[] {
+    const th = this.theme;
+    const innerWidth = Math.max(1, width - 2);
+    const border = (s: string) => th.fg("border", s);
+    const pad = (line: string) => {
+      const text = line.replace(/\t/g, "  ");
+      const truncated = truncateToWidth(text, innerWidth, "…");
+      return `${border("│")}${truncated}${" ".repeat(Math.max(0, innerWidth - visibleWidth(truncated)))}${border("│")}`;
+    };
+    const accepted = this.stats.httpAllow + this.stats.tcpAllow;
+    const denied = this.stats.httpDeny + this.stats.tcpDeny;
+
+    const lines = [
+      border(`╭${"─".repeat(innerWidth)}╮`),
+      pad(` ${th.fg("accent", th.bold("Gondolin network"))}`),
+      pad(
+        ` Accepted ${th.fg("success", String(accepted))}  Denied ${th.fg("error", String(denied))}`,
+      ),
+    ];
+
+    if (!this.expanded) {
+      lines.push(border(`╰${"─".repeat(innerWidth)}╯`));
+      return lines.map((line) => truncateToWidth(line, width, ""));
+    }
+
+    lines.push(
+      pad(
+        ` HTTP ${th.fg("success", String(this.stats.httpAllow))}/${th.fg("error", String(this.stats.httpDeny))}  TCP ${th.fg("success", String(this.stats.tcpAllow))}/${th.fg("error", String(this.stats.tcpDeny))}`,
+      ),
+      pad(` ${th.fg("dim", `${this.expandShortcut} or escape to collapse`)}`),
+      pad(""),
+    );
+
+    for (const configuredLine of this.getConfiguredText()) {
+      lines.push(pad(` ${th.fg("dim", configuredLine)}`));
+    }
+
+    lines.push(pad(""));
+    lines.push(pad(` ${th.fg("dim", "domain requests")}`));
+
+    const recent = this.events.slice().reverse();
+    if (recent.length === 0) {
+      lines.push(pad(` ${th.fg("dim", "no network events yet")}`));
+    }
+
+    for (const event of recent) {
+      const time = event.timestamp.toLocaleTimeString();
+      const marker =
+        event.action === "allow" ? th.fg("success", "✓") : th.fg("error", "✗");
+      const detail = event.detail ? th.fg("dim", ` ${event.detail}`) : "";
+      lines.push(
+        pad(` ${marker} ${time} ${event.kind} ${event.target}${detail}`),
+      );
+    }
+
+    lines.push(border(`╰${"─".repeat(innerWidth)}╯`));
+    return lines.map((line) => truncateToWidth(line, width, ""));
+  }
+
+  handleInput(data: string): void {
+    if (this.expanded && matchesKey(data, "escape")) {
+      this.onCollapse();
+    }
+  }
+
+  invalidate(): void {}
+}
 
 function getGuestProjectWorkspace(localCwd: string): string {
   return path.posix.join(
@@ -88,20 +214,32 @@ function shQuote(value: string): string {
   return "'" + value.replace(/'/g, "'\\''") + "'";
 }
 
-function toGuestPath(localCwd: string, localPath: string): string {
-  // pi tools pass absolute local paths; map them into /workspace/<project>.
-  const guestProjectWorkspace = getGuestProjectWorkspace(localCwd);
-  const rel = path.relative(localCwd, localPath);
-  if (rel === "") return guestProjectWorkspace;
-  if (rel.startsWith("..") || path.isAbsolute(rel)) {
+export function toGuestPath(localCwd: string, localPath: string): string {
+  // const projectDir = path.basename(localCwd);
+  const projectParent = path.dirname(localCwd);
+  const normalizedLocalCwd = path.resolve(localCwd);
+  const normalizedLocalPath = path.isAbsolute(localPath)
+    ? localPath
+    : path.resolve(normalizedLocalCwd, localPath);
+
+  if (
+    !normalizedLocalPath.startsWith(projectParent) &&
+    !normalizedLocalPath.startsWith(GUEST_WORKSPACE_ROOT)
+  ) {
     throw new Error(`path escapes workspace: ${localPath}`);
   }
-  // Convert platform separators to POSIX for the Linux guest
-  const posixRel = rel.split(path.sep).join(path.posix.sep);
-  return path.posix.join(guestProjectWorkspace, posixRel);
+
+  const guestPath = normalizedLocalPath.replace(
+    projectParent,
+    GUEST_WORKSPACE_ROOT,
+  );
+  return path.normalize(guestPath);
 }
 
-function createGondolinReadOps(vm: VM, localCwd: string): ReadOperations {
+function createGondolinReadOps(
+  vm: GondolinVM,
+  localCwd: string,
+): ReadOperations {
   return {
     readFile: async (p) => {
       const guestPath = toGuestPath(localCwd, p);
@@ -145,7 +283,10 @@ function createGondolinReadOps(vm: VM, localCwd: string): ReadOperations {
   };
 }
 
-function createGondolinWriteOps(vm: VM, localCwd: string): WriteOperations {
+function createGondolinWriteOps(
+  vm: GondolinVM,
+  localCwd: string,
+): WriteOperations {
   return {
     writeFile: async (p, content) => {
       const guestPath = toGuestPath(localCwd, p);
@@ -174,7 +315,10 @@ function createGondolinWriteOps(vm: VM, localCwd: string): WriteOperations {
   };
 }
 
-function createGondolinEditOps(vm: VM, localCwd: string): EditOperations {
+function createGondolinEditOps(
+  vm: GondolinVM,
+  localCwd: string,
+): EditOperations {
   const r = createGondolinReadOps(vm, localCwd);
   const w = createGondolinWriteOps(vm, localCwd);
   return { readFile: r.readFile, access: r.access, writeFile: w.writeFile };
@@ -191,7 +335,10 @@ function sanitizeEnv(
   return out;
 }
 
-function createGondolinBashOps(vm: VM, localCwd: string): BashOperations {
+function createGondolinBashOps(
+  vm: GondolinVM,
+  localCwd: string,
+): BashOperations {
   return {
     exec: async (command, cwd, { onData, signal, timeout, env }) => {
       const guestCwd = toGuestPath(localCwd, cwd);
@@ -245,23 +392,103 @@ export default function (pi: ExtensionAPI) {
   const localEdit = createEditTool(localCwd);
   const localBash = createBashTool(localCwd);
 
-  const gondolinSettings = loadGondolinSettings(localCwd);
-  const additionalMountSpecs = normalizeMountSpecs(localCwd, gondolinSettings);
-  const imageTag = getGondolinImageTag(gondolinSettings);
   const guestProjectWorkspace = getGuestProjectWorkspace(localCwd);
 
-  let vm: VM | null = null;
-  let vmStarting: Promise<VM> | null = null;
+  function readRuntimeSettings() {
+    const gondolinSettings = loadGondolinSettings(localCwd);
+    const additionalMountSpecs = normalizeMountSpecs(
+      localCwd,
+      gondolinSettings,
+    );
+    const imageTag = getGondolinImageTag(gondolinSettings);
+    const networkSettings = gondolinSettings.network ?? {};
+    const configuredAllowHosts = networkSettings.allowHosts;
+    const configuredTcpMap = networkSettings.tcpMap ?? {};
+    const hasTcpMap = Object.keys(configuredTcpMap).length > 0;
+
+    return {
+      additionalMountSpecs,
+      imageTag,
+      networkSettings,
+      configuredAllowHosts,
+      configuredTcpMap,
+      hasTcpMap,
+    };
+  }
+
+  let runtimeSettings = readRuntimeSettings();
+
+  let vm: GondolinVM | null = null;
+  let vmStarting: Promise<GondolinVM> | null = null;
   let imageEnsuring: Promise<boolean> | null = null;
+  let networkPanelDone: ((result?: void) => void) | null = null;
+  let networkPanelComponent: GondolinNetworkPanel | null = null;
+  let networkPanelTui: { requestRender(): void } | null = null;
+  let networkPanelExpanded = false;
+  let networkPanelGeneration = 0;
+
+  const networkEvents: NetworkEvent[] = [];
+  const networkStats: NetworkStats = {
+    httpAllow: 0,
+    httpDeny: 0,
+    tcpAllow: 0,
+    tcpDeny: 0,
+  };
+
+  function recordNetworkEvent(event: Omit<NetworkEvent, "timestamp">) {
+    networkEvents.push({ ...event, timestamp: new Date() });
+    if (networkEvents.length > NETWORK_EVENT_LIMIT) {
+      networkEvents.splice(0, networkEvents.length - NETWORK_EVENT_LIMIT);
+    }
+
+    if (event.kind === "http" && event.action === "allow")
+      networkStats.httpAllow++;
+    if (event.kind === "http" && event.action === "deny")
+      networkStats.httpDeny++;
+    if (event.kind === "tcp" && event.action === "allow")
+      networkStats.tcpAllow++;
+    if (event.kind === "tcp" && event.action === "deny") networkStats.tcpDeny++;
+
+    networkPanelComponent?.invalidate();
+    networkPanelTui?.requestRender();
+  }
+
+  function getConfiguredNetworkText() {
+    const lines: string[] = [];
+    if (runtimeSettings.configuredAllowHosts !== undefined) {
+      lines.push(
+        `allowHosts: ${runtimeSettings.configuredAllowHosts.length > 0 ? runtimeSettings.configuredAllowHosts.join(", ") : "(deny all)"}`,
+      );
+    } else {
+      lines.push("allowHosts: (not configured)");
+    }
+    if (runtimeSettings.hasTcpMap) {
+      for (const [guest, upstream] of Object.entries(
+        runtimeSettings.configuredTcpMap,
+      )) {
+        lines.push(`tcpMap: ${guest} → ${upstream}`);
+      }
+    } else {
+      lines.push("tcpMap: (not configured)");
+    }
+    return lines;
+  }
 
   function createRealFSProviderFromSpec(spec: Record<string, unknown>) {
     const hostPath = spec.hostPath ?? spec.path ?? spec.root;
     if (typeof hostPath !== "string") {
-      throw new Error("mount spec must include a string path, hostPath, or root");
+      throw new Error(
+        "mount spec must include a string path, hostPath, or root",
+      );
     }
 
-    const { hostPath: _hostPath, path: _path, root: _root, options, ...rest } =
-      spec;
+    const {
+      hostPath: _hostPath,
+      path: _path,
+      root: _root,
+      options,
+      ...rest
+    } = spec;
     const providerOptions = {
       ...rest,
       ...(options && typeof options === "object" ? options : {}),
@@ -275,7 +502,9 @@ export default function (pi: ExtensionAPI) {
       [guestProjectWorkspace]: new RealFSProvider(localCwd),
     };
 
-    for (const [guestPath, spec] of Object.entries(additionalMountSpecs)) {
+    for (const [guestPath, spec] of Object.entries(
+      runtimeSettings.additionalMountSpecs,
+    )) {
       if (guestPath === guestProjectWorkspace) {
         throw new Error(
           `${guestProjectWorkspace} is reserved for the project mount`,
@@ -289,17 +518,187 @@ export default function (pi: ExtensionAPI) {
     return mounts;
   }
 
+  function createNetworkOptions() {
+    const options: Record<string, unknown> = {};
+
+    const result = createHttpHooks({
+      allowedHosts: runtimeSettings.configuredAllowHosts,
+    });
+    const baseIsIpAllowed = result.httpHooks.isIpAllowed;
+    result.httpHooks.isIpAllowed = async (info: any) => {
+      const allowed = baseIsIpAllowed ? await baseIsIpAllowed(info) : true;
+      recordNetworkEvent({
+        kind: "http",
+        action: allowed ? "allow" : "deny",
+        target: `${info.protocol}://${info.hostname}:${info.port}`,
+        detail: `${info.ip}`,
+      });
+      return allowed;
+    };
+    options.httpHooks = result.httpHooks;
+    options.env = result.env;
+
+    if (runtimeSettings.hasTcpMap) {
+      options.tcp = { hosts: runtimeSettings.configuredTcpMap };
+      options.dns = { mode: "synthetic", syntheticHostMapping: "per-host" };
+    }
+
+    return options;
+  }
+
+  function recordNetworkDebugMessage(component: unknown, message: unknown) {
+    if (component !== "net" || typeof message !== "string") return;
+
+    const tcpMap = message.match(/^tcp map \S+ (\S+) -> (\S+)$/);
+    if (tcpMap) {
+      recordNetworkEvent({
+        kind: "tcp",
+        action: "allow",
+        target: tcpMap[1]!,
+        detail: `→ ${tcpMap[2]!}`,
+      });
+      return;
+    }
+
+    const tcpBlocked = message.match(/^tcp blocked \S+ -> (\S+) \(tcp\)$/);
+    if (tcpBlocked) {
+      recordNetworkEvent({
+        kind: "tcp",
+        action: "deny",
+        target: tcpBlocked[1]!,
+      });
+    }
+  }
+
+  function shouldShowNetworkPanel() {
+    const panel = runtimeSettings.networkSettings.panel;
+    return (
+      panel !== false && !(typeof panel === "object" && panel.enabled === false)
+    );
+  }
+
+  function getNetworkPanelExpandShortcut() {
+    const panel = runtimeSettings.networkSettings.panel;
+    if (typeof panel === "object" && typeof panel.expandShortcut === "string") {
+      return panel.expandShortcut;
+    }
+    return DEFAULT_NETWORK_PANEL_EXPAND_SHORTCUT;
+  }
+
+  function getNetworkPanelOverlayOptions(): OverlayOptions {
+    return networkPanelExpanded
+      ? {
+          anchor: "center" as const,
+          width: "95%" as const,
+          maxHeight: "95%" as const,
+          margin: 1,
+          visible: (termWidth: number, termHeight: number) =>
+            termWidth >= 40 && termHeight >= 8,
+        }
+      : {
+          anchor: "top-right" as const,
+          width: 34,
+          minWidth: 34,
+          maxHeight: 4,
+          margin: { top: 1, right: 1 },
+          nonCapturing: true,
+          visible: (termWidth: number) => termWidth >= 40,
+        };
+  }
+
+  function showNetworkPanel(ctx?: ExtensionContext) {
+    if (!ctx || !ctx.hasUI || networkPanelDone) return;
+
+    const generation = ++networkPanelGeneration;
+    void ctx.ui
+      .custom<void>(
+        (tui, theme, _keybindings, done) => {
+          networkPanelTui = tui;
+          networkPanelDone = done;
+          networkPanelComponent = new GondolinNetworkPanel(
+            networkEvents,
+            networkStats,
+            getConfiguredNetworkText,
+            theme,
+            networkPanelExpanded,
+            getNetworkPanelExpandShortcut(),
+            () => setNetworkPanelExpanded(false, ctx),
+          );
+          return networkPanelComponent;
+        },
+        {
+          overlay: true,
+          overlayOptions: getNetworkPanelOverlayOptions(),
+        },
+      )
+      .finally(() => {
+        if (generation !== networkPanelGeneration) return;
+        networkPanelDone = null;
+        networkPanelComponent = null;
+        networkPanelTui = null;
+      });
+  }
+
+  function hideNetworkPanel() {
+    networkPanelGeneration++;
+    networkPanelDone?.();
+    networkPanelDone = null;
+    networkPanelComponent = null;
+    networkPanelTui = null;
+  }
+
+  function showNetworkPanelFromCommand(ctx?: ExtensionContext) {
+    showNetworkPanel(ctx);
+    ctx?.ui.notify("Gondolin network panel shown.", "info");
+  }
+
+  function hideNetworkPanelFromCommand(ctx?: ExtensionContext) {
+    hideNetworkPanel();
+    ctx?.ui.notify("Gondolin network panel hidden.", "info");
+  }
+
+  function toggleNetworkPanel(ctx?: ExtensionContext) {
+    if (networkPanelDone) {
+      hideNetworkPanelFromCommand(ctx);
+      return;
+    }
+    showNetworkPanelFromCommand(ctx);
+  }
+
+  function setNetworkPanelExpanded(expanded: boolean, ctx?: ExtensionContext) {
+    networkPanelExpanded = expanded;
+    if (networkPanelDone) {
+      hideNetworkPanel();
+    }
+    showNetworkPanel(ctx);
+    ctx?.ui.notify(
+      networkPanelExpanded
+        ? "Gondolin network panel expanded."
+        : "Gondolin network panel collapsed.",
+      "info",
+    );
+  }
+
+  function toggleNetworkPanelExpanded(ctx?: ExtensionContext) {
+    setNetworkPanelExpanded(!networkPanelExpanded, ctx);
+  }
+
   async function ensureImage(
     ctx?: ExtensionContext,
     options?: { forceBuild?: boolean; promptReloadIfRunning?: boolean },
   ): Promise<boolean> {
-    if (!imageTag) return false;
+    if (!runtimeSettings.imageTag) return false;
     if (imageEnsuring && !options?.forceBuild) return imageEnsuring;
 
     imageEnsuring = (async () => {
-      const result = await ensureGondolinImage(localCwd, imageTag, undefined, {
-        forceBuild: options?.forceBuild,
-      });
+      const result = await ensureGondolinImage(
+        localCwd,
+        runtimeSettings.imageTag,
+        undefined,
+        {
+          forceBuild: options?.forceBuild,
+        },
+      );
       const built = result.status === "built";
       if (built && options?.promptReloadIfRunning && vm) {
         ctx?.ui.notify(
@@ -336,7 +735,20 @@ export default function (pi: ExtensionAPI) {
       await ensureImage(ctx);
 
       const created = await VM.create({
-        ...(imageTag ? { sandbox: { imagePath: imageTag } } : {}),
+        ...(runtimeSettings.imageTag || runtimeSettings.hasTcpMap
+          ? {
+              sandbox: {
+                ...(runtimeSettings.imageTag
+                  ? { imagePath: runtimeSettings.imageTag }
+                  : {}),
+                ...(runtimeSettings.hasTcpMap ? { debug: ["net"] } : {}),
+              },
+            }
+          : {}),
+        ...(runtimeSettings.hasTcpMap
+          ? { debugLog: recordNetworkDebugMessage }
+          : {}),
+        ...createNetworkOptions(),
         vfs: {
           mounts: createMounts(),
         },
@@ -375,18 +787,29 @@ export default function (pi: ExtensionAPI) {
   }
 
   async function reloadVm(ctx?: ExtensionContext) {
+    const nextSettings = readRuntimeSettings();
+    runtimeSettings = nextSettings;
+    imageEnsuring = null;
+    networkPanelComponent?.invalidate();
+    networkPanelTui?.requestRender();
+
     await stopVm(ctx);
-    return ensureVm(ctx);
+    const reloaded = await ensureVm(ctx);
+    if (shouldShowNetworkPanel()) showNetworkPanel(ctx);
+    return reloaded;
   }
 
   async function buildImageFromCommand(ctx?: ExtensionContext) {
-    if (!imageTag) {
+    if (!runtimeSettings.imageTag) {
       ctx?.ui.notify("No Gondolin image tag configured.", "warning");
       return;
     }
     ctx?.ui.setStatus(
       "gondolin",
-      ctx.ui.theme.fg("accent", `Gondolin: building ${imageTag}`),
+      ctx.ui.theme.fg(
+        "accent",
+        `Gondolin: building ${runtimeSettings.imageTag}`,
+      ),
     );
     await ensureImage(ctx, { forceBuild: true, promptReloadIfRunning: true });
     ctx?.ui.setStatus(
@@ -395,16 +818,46 @@ export default function (pi: ExtensionAPI) {
         "accent",
         vm
           ? `Gondolin: running (${localCwd} -> ${guestProjectWorkspace})`
-          : `Gondolin: image ready (${imageTag})`,
+          : `Gondolin: image ready (${runtimeSettings.imageTag})`,
       ),
     );
-    ctx?.ui.notify(`Gondolin image ${imageTag} built.`, "info");
+    ctx?.ui.notify(`Gondolin image ${runtimeSettings.imageTag} built.`, "info");
   }
 
   function registerGondolinCommands() {
     const api = pi as any;
-    const run = async (subcommand: string | undefined, ctx?: ExtensionContext) => {
-      switch (subcommand) {
+    const panelCommandUsage =
+      "Available /gondolin panel subcommands: show, hide, toggle, expand, collapse, toggle-expanded";
+    const runPanelCommand = (
+      action: string | undefined,
+      ctx?: ExtensionContext,
+    ) => {
+      switch (action) {
+        case "show":
+          showNetworkPanelFromCommand(ctx);
+          return;
+        case "hide":
+          hideNetworkPanelFromCommand(ctx);
+          return;
+        case "toggle":
+          toggleNetworkPanel(ctx);
+          return;
+        case "expand":
+          setNetworkPanelExpanded(true, ctx);
+          return;
+        case "collapse":
+          setNetworkPanelExpanded(false, ctx);
+          return;
+        case "toggle-expanded":
+          toggleNetworkPanelExpanded(ctx);
+          return;
+        case undefined:
+        default:
+          ctx?.ui.notify(panelCommandUsage, "info");
+      }
+    };
+    const run = async (args: string[], ctx?: ExtensionContext) => {
+      switch (args[0]) {
         case "build":
           await buildImageFromCommand(ctx);
           return;
@@ -412,44 +865,70 @@ export default function (pi: ExtensionAPI) {
           await reloadVm(ctx);
           ctx?.ui.notify("Gondolin VM reloaded.", "info");
           return;
+        case "panel":
+          runPanelCommand(args[1], ctx);
+          return;
         default:
-          ctx?.ui.notify("Usage: /gondolin build or /gondolin reload", "info");
+          ctx?.ui.notify(
+            "Usage: /gondolin build, /gondolin reload, or /gondolin panel [show|hide|toggle|expand|collapse|toggle-expanded]",
+            "info",
+          );
       }
     };
 
-    const firstArg = (args: string | string[] | undefined) =>
-      Array.isArray(args) ? args[0] : args?.trim().split(/\s+/)[0];
+    const parseArgs = (args: string | string[] | undefined) =>
+      Array.isArray(args)
+        ? args
+        : (args?.trim().split(/\s+/).filter(Boolean) ?? []);
 
     if (typeof api.registerCommand === "function") {
       api.registerCommand("gondolin", {
-        description: "Build or reload the Gondolin VM: /gondolin build|reload",
+        description:
+          "Build/reload Gondolin or control network panel: /gondolin build|reload|panel",
         getArgumentCompletions: (prefix: string) => {
-          const items = ["build", "reload"].map((value) => ({ value, label: value }));
-          const filtered = items.filter((item) => item.value.startsWith(prefix));
+          const items = ["build", "reload", "panel"].map((value) => ({
+            value,
+            label: value,
+          }));
+          const filtered = items.filter((item) =>
+            item.value.startsWith(prefix),
+          );
           return filtered.length > 0 ? filtered : null;
         },
         handler: async (args: string, ctx: ExtensionContext) => {
-          await run(firstArg(args), ctx);
+          await run(parseArgs(args), ctx);
         },
       });
       return;
     }
 
     if (typeof api.registerSlashCommand === "function") {
-      api.registerSlashCommand("gondolin", async (args: string[], ctx: ExtensionContext) => {
-        await run(firstArg(args), ctx);
-      });
+      api.registerSlashCommand(
+        "gondolin",
+        async (args: string[], ctx: ExtensionContext) => {
+          await run(parseArgs(args), ctx);
+        },
+      );
     }
   }
 
   registerGondolinCommands();
 
+  pi.registerShortcut(getNetworkPanelExpandShortcut(), {
+    description: "Expand or collapse the Gondolin network panel",
+    handler: (ctx) => {
+      toggleNetworkPanelExpanded(ctx);
+    },
+  });
+
   pi.on("session_start", async (_event, ctx) => {
     // Start eagerly so the user sees errors early (missing qemu, etc.)
     await ensureVm(ctx);
+    if (shouldShowNetworkPanel()) showNetworkPanel(ctx);
   });
 
   pi.on("session_shutdown", async (_event, ctx) => {
+    hideNetworkPanel();
     await stopVm(ctx);
   });
 

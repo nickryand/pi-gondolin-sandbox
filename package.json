@@ -13,7 +13,8 @@
   ],
   "exports": "./index.ts",
   "dependencies": {
-    "@earendil-works/gondolin": "^0.12.0"
+    "@earendil-works/gondolin": "^0.12.0",
+    "@earendil-works/pi-tui": "*"
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*"

@@ -49,6 +49,16 @@ fs.writeFileSync(
         },
       },
     },
+    network: {
+      allowHosts: ["api.github.com", "*.npmjs.org"],
+      tcpMap: {
+        "postgres.local:5432": "127.0.0.1:5432",
+      },
+      panel: {
+        enabled: true,
+        expandShortcut: "alt+n",
+      },
+    },
   }),
 );
 
@@ -77,6 +87,17 @@ assert.equal(mounts["/nested-options"].hostPath, "/var/tmp/gondolin-extra");
 assert.deepEqual(mounts["/nested-options"].options, {
   readOnly: false,
   uid: 1000,
+});
+
+assert.deepEqual(settings.network, {
+  allowHosts: ["api.github.com", "*.npmjs.org"],
+  tcpMap: {
+    "postgres.local:5432": "127.0.0.1:5432",
+  },
+  panel: {
+    enabled: true,
+    expandShortcut: "alt+n",
+  },
 });
 
 const legacyProjectDir = fs.mkdtempSync(path.join(os.tmpdir(), "gondolin-settings-legacy-"));
