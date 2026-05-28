@@ -36,17 +36,29 @@ To ensure the AI agent remains "aware" of its environment, the extension:
 
 ## Features added on top of basic sandboxing
 
-* Project-local configuration through `.gondolin.json` (or legacy `.gondolin`).
+* Project-local configuration through `.gondolin.json` (or legacy `.gondolin`), with `/gondolin init` to create a starter file.
 * Custom sandbox images selected with `image.tag`/`imageTag` and built from `Gondolinfile` when needed.
 * Additional RealFS mounts beyond the default project mount.
 * HTTP allow-host policy support through `network.allowHosts`.
 * TCP host forwarding through `network.tcpMap`, including synthetic DNS setup.
 * Live network request panel with compact top-right counts and an expandable 95% request view.
-* `/gondolin build`, `/gondolin reload`, `/gondolin panel`, and configurable panel shortcut controls.
+* `/gondolin init`, `/gondolin build`, `/gondolin reload`, `/gondolin panel`, and configurable panel shortcut controls.
 
 ## Project settings
 
-Create a JSON `.gondolin.json` file in the project directory to set the VM image tag, add more RealFS mounts, and configure limited network access. The extension also accepts the legacy `.gondolin` JSON filename, but `.gondolin.json` is preferred:
+Create a JSON `.gondolin.json` file in the project directory to set the VM image tag, add more RealFS mounts, and configure limited network access. The extension also accepts the legacy `.gondolin` JSON filename, but `.gondolin.json` is preferred.
+
+Run `/gondolin init` inside pi to create a minimal `.gondolin.json` if one does not already exist:
+
+```json
+{
+  "image": {
+    "tag": "pi-sandbox:latest"
+  }
+}
+```
+
+The command notification also includes an example showing the optional mounts syntax. A fuller configuration can look like this:
 
 ```json
 {
@@ -114,6 +126,7 @@ Panel behavior:
 
 ## Commands and shortcuts
 
+* `/gondolin init` creates a minimal `.gondolin.json` starter file and shows an example with optional mounts syntax. It will not overwrite an existing file.
 * `/gondolin build` force-builds the configured image from `Gondolinfile`. If the VM is running, reload it afterwards with `/gondolin reload`.
 * `/gondolin reload` re-reads `.gondolin.json`/`.gondolin`, stops the current VM, and starts it again with the updated image, mount, and network settings.
 * `/gondolin panel` toggles the network overlay.
