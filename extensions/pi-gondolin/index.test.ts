@@ -96,6 +96,10 @@ assert.deepEqual(notifications, [
   "image": {
     "tag": "pi-sandbox:latest"
   },
+  "vm": {
+    "cpus": 4,
+    "memory": "8G"
+  },
   "mounts": {
     "/workspace/test": {
       "path": "../",

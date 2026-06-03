@@ -19,7 +19,8 @@
       "openssh",
       "rustup",
       "jujutsu",
-      "ripgrep"
+      "ripgrep",
+      "openssl"
     ],
     "initramfsPackages": [],
     "krunfwVersion": "v5.2.1"

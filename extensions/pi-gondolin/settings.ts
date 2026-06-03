@@ -44,11 +44,18 @@ export interface GondolinNetworkSettings {
   [key: string]: unknown;
 }
 
+export interface GondolinVmSettings {
+  cpus?: number;
+  memory?: string;
+  [key: string]: unknown;
+}
+
 export interface GondolinSettings {
   mounts: Record<string, string | GondolinMountSpec>;
   imageTag?: string;
   image?: GondolinImageSettings;
   network?: GondolinNetworkSettings;
+  vm?: GondolinVmSettings;
   [key: string]: unknown;
 }
 
@@ -94,13 +101,46 @@ export function loadGondolinSettings(
     throw new Error(`${settingsPath} field "network" must be an object`);
   }
 
+  const vm = parsed.vm;
+  if (vm !== undefined && !isPlainObject(vm)) {
+    throw new Error(`${settingsPath} field "vm" must be an object`);
+  }
+
   return {
     ...parsed,
     mounts: mounts as Record<string, string | GondolinMountSpec>,
     ...(network !== undefined
       ? { network: normalizeNetworkSettings(network, settingsPath) }
       : {}),
+    ...(vm !== undefined ? { vm: normalizeVmSettings(vm, settingsPath) } : {}),
   };
+}
+
+function normalizeVmSettings(
+  vm: Record<string, unknown>,
+  settingsPath: string,
+): GondolinVmSettings {
+  const normalized: GondolinVmSettings = { ...vm };
+
+  if (vm.cpus !== undefined) {
+    if (!Number.isInteger(vm.cpus) || vm.cpus < 1) {
+      throw new Error(
+        `${settingsPath} field "vm.cpus" must be a positive integer`,
+      );
+    }
+    normalized.cpus = vm.cpus;
+  }
+
+  if (vm.memory !== undefined) {
+    if (typeof vm.memory !== "string" || vm.memory.length === 0) {
+      throw new Error(
+        `${settingsPath} field "vm.memory" must be a non-empty string`,
+      );
+    }
+    normalized.memory = vm.memory;
+  }
+
+  return normalized;
 }
 
 function normalizeNetworkSettings(

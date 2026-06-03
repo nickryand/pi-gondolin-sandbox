@@ -38,6 +38,7 @@ To ensure the AI agent remains "aware" of its environment, the extension:
 
 * Project-local configuration through `.gondolin.json` (or legacy `.gondolin`), with `/gondolin init` to create a starter file.
 * Custom sandbox images selected with `image.tag`/`imageTag` and built from `Gondolinfile` when needed.
+* Configurable VM CPU and memory through `vm.cpus` and `vm.memory`.
 * Additional RealFS mounts beyond the default project mount.
 * HTTP allow-host policy support through `network.allowHosts`.
 * TCP host forwarding through `network.tcpMap`, including synthetic DNS setup.
@@ -64,6 +65,10 @@ The command notification also includes an example showing the optional mounts sy
 {
   "image": {
     "tag": "pi-sandbox:latest"
+  },
+  "vm": {
+    "cpus": 4,
+    "memory": "8G"
   },
   "mounts": {
     "/cache": "./.cache",
@@ -97,6 +102,10 @@ The command notification also includes an example showing the optional mounts sy
 Use `image.tag` (or top-level `imageTag`) to select the Gondolin image for the sandbox. Before the VM starts, the extension checks the local image store through the Gondolin SDK. If the image is missing and the project contains `Gondolinfile`, it builds the image through the SDK using that file as the build configuration, imports the result into the local image store, and tags it with the configured tag.
 
 Build metadata is stored in `.gondolin/image-build.json`. If the `Gondolinfile` modification time is newer than that metadata, the image is rebuilt. If a rebuild happens while a VM is already running, pi will prompt you to run `/gondolin reload` so the VM starts using the new image. Add `.gondolin/` to your project `.gitignore` to ignore the build metadata cache.
+
+### VM resources
+
+Set `vm.cpus` and `vm.memory` to configure the Gondolin virtual machine resources. `vm.cpus` must be a positive integer. `vm.memory` is a Gondolin/QEMU memory-size string such as `"512M"`, `"2G"`, or `"8G"`. Omit either setting to keep Gondolin's default. If the VM is already running, apply changes with `/gondolin reload`.
 
 ### Additional mounts
 
