@@ -2,6 +2,10 @@
   "image": {
     "tag": "pi-sandbox:latest"
   },
+  "vm": {
+    "cpus": 6,
+    "memory": "12G"
+  },
   "mounts": {
     "/workspace/test": {
       "path": "../",

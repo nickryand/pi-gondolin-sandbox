@@ -59,6 +59,10 @@ fs.writeFileSync(
         expandShortcut: "alt+n",
       },
     },
+    vm: {
+      cpus: 4,
+      memory: "8G",
+    },
   }),
 );
 
@@ -99,6 +103,35 @@ assert.deepEqual(settings.network, {
     expandShortcut: "alt+n",
   },
 });
+assert.deepEqual(settings.vm, {
+  cpus: 4,
+  memory: "8G",
+});
+
+for (const [name, settingsJson, message] of [
+  ["vm-non-object", { vm: false }, 'field "vm" must be an object'],
+  [
+    "invalid-cpus",
+    { vm: { cpus: 0 } },
+    'field "vm.cpus" must be a positive integer',
+  ],
+  [
+    "invalid-memory",
+    { vm: { memory: 1024 } },
+    'field "vm.memory" must be a non-empty string',
+  ],
+] as const) {
+  const invalidProjectDir = fs.mkdtempSync(
+    path.join(os.tmpdir(), `gondolin-settings-${name}-`),
+  );
+  fs.writeFileSync(
+    path.join(invalidProjectDir, GONDOLIN_SETTINGS_JSON_FILE),
+    JSON.stringify(settingsJson),
+  );
+  assert.throws(() => loadGondolinSettings(invalidProjectDir), {
+    message: new RegExp(message),
+  });
+}
 
 const legacyProjectDir = fs.mkdtempSync(path.join(os.tmpdir(), "gondolin-settings-legacy-"));
 fs.writeFileSync(

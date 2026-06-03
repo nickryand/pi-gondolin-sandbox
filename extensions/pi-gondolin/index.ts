@@ -404,6 +404,7 @@ export default function (pi: ExtensionAPI) {
     );
     const imageTag = getGondolinImageTag(gondolinSettings);
     const networkSettings = gondolinSettings.network ?? {};
+    const vmSettings = gondolinSettings.vm ?? {};
     const configuredAllowHosts = networkSettings.allowHosts;
     const configuredTcpMap = networkSettings.tcpMap ?? {};
     const hasTcpMap = Object.keys(configuredTcpMap).length > 0;
@@ -412,6 +413,7 @@ export default function (pi: ExtensionAPI) {
       additionalMountSpecs,
       imageTag,
       networkSettings,
+      vmSettings,
       configuredAllowHosts,
       configuredTcpMap,
       hasTcpMap,
@@ -518,6 +520,30 @@ export default function (pi: ExtensionAPI) {
     }
 
     return mounts;
+  }
+
+  function createVmResourceOptions() {
+    const options: Record<string, unknown> = {};
+    if (runtimeSettings.vmSettings.cpus !== undefined) {
+      options.cpus = runtimeSettings.vmSettings.cpus;
+    }
+    if (runtimeSettings.vmSettings.memory !== undefined) {
+      options.memory = runtimeSettings.vmSettings.memory;
+    }
+    return options;
+  }
+
+  function formatVmResources() {
+    const parts: string[] = [];
+    if (runtimeSettings.vmSettings.cpus !== undefined) {
+      parts.push(
+        `${runtimeSettings.vmSettings.cpus} CPU${runtimeSettings.vmSettings.cpus === 1 ? "" : "s"}`,
+      );
+    }
+    if (runtimeSettings.vmSettings.memory !== undefined) {
+      parts.push(`${runtimeSettings.vmSettings.memory} memory`);
+    }
+    return parts.length > 0 ? `, ${parts.join(", ")}` : "";
   }
 
   function createNetworkOptions() {
@@ -730,7 +756,7 @@ export default function (pi: ExtensionAPI) {
         "gondolin",
         ctx.ui.theme.fg(
           "accent",
-          `Gondolin: starting (mount ${guestProjectWorkspace})`,
+          `Gondolin: starting (mount ${guestProjectWorkspace}${formatVmResources()})`,
         ),
       );
 
@@ -750,6 +776,7 @@ export default function (pi: ExtensionAPI) {
         ...(runtimeSettings.hasTcpMap
           ? { debugLog: recordNetworkDebugMessage }
           : {}),
+        ...createVmResourceOptions(),
         ...createNetworkOptions(),
         vfs: {
           mounts: createMounts(),
@@ -765,7 +792,7 @@ export default function (pi: ExtensionAPI) {
         ),
       );
       ctx?.ui.notify(
-        `Gondolin VM ready. Host ${localCwd} mounted at ${guestProjectWorkspace}`,
+        `Gondolin VM ready. Host ${localCwd} mounted at ${guestProjectWorkspace}${formatVmResources()}`,
         "info",
       );
       return created;
@@ -837,6 +864,10 @@ export default function (pi: ExtensionAPI) {
     const exampleSettingsJson = `{
   "image": {
     "tag": "pi-sandbox:latest"
+  },
+  "vm": {
+    "cpus": 4,
+    "memory": "8G"
   },
   "mounts": {
     "/workspace/test": {
