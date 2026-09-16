@@ -50,12 +50,18 @@ export interface GondolinVmSettings {
   [key: string]: unknown;
 }
 
+export interface GondolinSecretSpec {
+  hosts: string[];
+  value: string;
+}
+
 export interface GondolinSettings {
   mounts: Record<string, string | GondolinMountSpec>;
   imageTag?: string;
   image?: GondolinImageSettings;
   network?: GondolinNetworkSettings;
   vm?: GondolinVmSettings;
+  secrets?: Record<string, GondolinSecretSpec>;
   [key: string]: unknown;
 }
 
@@ -106,6 +112,11 @@ export function loadGondolinSettings(
     throw new Error(`${settingsPath} field "vm" must be an object`);
   }
 
+  const secrets = parsed.secrets;
+  if (secrets !== undefined && !isPlainObject(secrets)) {
+    throw new Error(`${settingsPath} field "secrets" must be an object`);
+  }
+
   return {
     ...parsed,
     mounts: mounts as Record<string, string | GondolinMountSpec>,
@@ -113,7 +124,42 @@ export function loadGondolinSettings(
       ? { network: normalizeNetworkSettings(network, settingsPath) }
       : {}),
     ...(vm !== undefined ? { vm: normalizeVmSettings(vm, settingsPath) } : {}),
+    ...(secrets !== undefined
+      ? { secrets: normalizeSecrets(secrets, settingsPath) }
+      : {}),
   };
+}
+
+function normalizeSecrets(
+  secrets: Record<string, unknown>,
+  settingsPath: string,
+): Record<string, GondolinSecretSpec> {
+  const normalized: Record<string, GondolinSecretSpec> = {};
+
+  for (const [name, value] of Object.entries(secrets)) {
+    if (!isPlainObject(value)) {
+      throw new Error(`${settingsPath} field "secrets.${name}" must be an object`);
+    }
+    if (!Array.isArray(value.hosts)) {
+      throw new Error(`${settingsPath} field "secrets.${name}.hosts" must be an array`);
+    }
+    const hosts = value.hosts.map((host, i) => {
+      if (typeof host !== "string" || host.length === 0) {
+        throw new Error(
+          `${settingsPath} field "secrets.${name}.hosts[${i}]" must be a non-empty string`,
+        );
+      }
+      return host;
+    });
+    if (typeof value.value !== "string") {
+      throw new Error(
+        `${settingsPath} field "secrets.${name}.value" must be a string`,
+      );
+    }
+    normalized[name] = { hosts, value: value.value };
+  }
+
+  return normalized;
 }
 
 function normalizeVmSettings(

@@ -408,6 +408,7 @@ export default function (pi: ExtensionAPI) {
     const configuredAllowHosts = networkSettings.allowHosts;
     const configuredTcpMap = networkSettings.tcpMap ?? {};
     const hasTcpMap = Object.keys(configuredTcpMap).length > 0;
+    const secrets = gondolinSettings.secrets ?? {};
 
     return {
       additionalMountSpecs,
@@ -417,6 +418,7 @@ export default function (pi: ExtensionAPI) {
       configuredAllowHosts,
       configuredTcpMap,
       hasTcpMap,
+      secrets,
     };
   }
 
@@ -551,6 +553,7 @@ export default function (pi: ExtensionAPI) {
 
     const result = createHttpHooks({
       allowedHosts: runtimeSettings.configuredAllowHosts,
+      secrets: runtimeSettings.secrets,
     });
     const baseIsIpAllowed = result.httpHooks.isIpAllowed;
     result.httpHooks.isIpAllowed = async (info: any) => {

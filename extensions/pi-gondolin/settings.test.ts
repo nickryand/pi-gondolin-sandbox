@@ -63,6 +63,12 @@ fs.writeFileSync(
       cpus: 4,
       memory: "8G",
     },
+    secrets: {
+      GITHUB_TOKEN: {
+        hosts: ["api.github.com"],
+        value: "test-token",
+      },
+    },
   }),
 );
 
@@ -107,6 +113,12 @@ assert.deepEqual(settings.vm, {
   cpus: 4,
   memory: "8G",
 });
+assert.deepEqual(settings.secrets, {
+  GITHUB_TOKEN: {
+    hosts: ["api.github.com"],
+    value: "test-token",
+  },
+});
 
 for (const [name, settingsJson, message] of [
   ["vm-non-object", { vm: false }, 'field "vm" must be an object'],
@@ -119,6 +131,21 @@ for (const [name, settingsJson, message] of [
     "invalid-memory",
     { vm: { memory: 1024 } },
     'field "vm.memory" must be a non-empty string',
+  ],
+  [
+    "secrets-non-object",
+    { secrets: false },
+    'field "secrets" must be an object',
+  ],
+  [
+    "secret-hosts-non-array",
+    { secrets: { TOKEN: { hosts: "api.github.com", value: "secret" } } },
+    'field "secrets.TOKEN.hosts" must be an array',
+  ],
+  [
+    "secret-value-non-string",
+    { secrets: { TOKEN: { hosts: ["api.github.com"], value: 42 } } },
+    'field "secrets.TOKEN.value" must be a string',
   ],
 ] as const) {
   const invalidProjectDir = fs.mkdtempSync(

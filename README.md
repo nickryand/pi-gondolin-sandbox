@@ -83,6 +83,12 @@ The command notification also includes an example showing the optional mounts sy
       }
     }
   },
+  "secrets": {
+    "GITHUB_TOKEN": {
+      "hosts": ["api.github.com"],
+      "value": "set-this-on-the-host"
+    }
+  },
   "network": {
     "allowHosts": ["api.github.com", "*.npmjs.org"],
     "tcpMap": {
@@ -112,6 +118,23 @@ Set `vm.cpus` and `vm.memory` to configure the Gondolin virtual machine resource
 Mount keys are absolute guest paths. Values may be a host path string or an object with `path`, `hostPath`, or `root`. Relative host paths are resolved from the project directory. All other fields, plus nested `options`, are passed through to Gondolin's `RealFSProvider` options.
 
 The project directory itself is always mounted read-write at `/workspace/<project-folder-name>`. Additional mounts cannot replace that reserved project mount.
+
+### HTTP secrets
+
+`secrets` configures Gondolin's native host-side secret injection. Each key becomes a placeholder environment variable in the guest, while the real value is injected only into outbound HTTP requests to matching hosts:
+
+```json
+{
+  "secrets": {
+    "GITHUB_TOKEN": {
+      "hosts": ["api.github.com"],
+      "value": "host-secret-value"
+    }
+  }
+}
+```
+
+Secret values are read by the host and should not be committed to project configuration. The guest never receives the real value; it only receives Gondolin's generated placeholder.
 
 ### Network policy and request panel
 

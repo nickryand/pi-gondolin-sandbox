@@ -20,7 +20,8 @@
       "rustup",
       "jujutsu",
       "ripgrep",
-      "openssl"
+      "openssl",
+      "github-cli"
     ],
     "initramfsPackages": [],
     "krunfwVersion": "v5.2.1"
