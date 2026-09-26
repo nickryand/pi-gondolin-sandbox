@@ -156,7 +156,18 @@ function normalizeSecrets(
         `${settingsPath} field "secrets.${name}.value" must be a string`,
       );
     }
-    normalized[name] = { hosts, value: value.value };
+
+    const envReference = value.value.match(/^\$\{env\.([A-Za-z_][A-Za-z0-9_]*)\}$/);
+    const secretValue = envReference
+      ? process.env[envReference[1]]
+      : value.value;
+    if (envReference && secretValue === undefined) {
+      throw new Error(
+        `${settingsPath} field "secrets.${name}.value" references unset environment variable "${envReference[1]}"`,
+      );
+    }
+
+    normalized[name] = { hosts, value: secretValue ?? value.value };
   }
 
   return normalized;

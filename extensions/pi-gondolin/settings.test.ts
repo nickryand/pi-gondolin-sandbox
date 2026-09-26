@@ -160,6 +160,108 @@ for (const [name, settingsJson, message] of [
   });
 }
 
+const envNames = [
+  "GONDOLIN_TEST_TOKEN",
+  "GONDOLIN_TEST_TOKEN_2",
+  "GONDOLIN_TEST_EMPTY_TOKEN",
+  "GONDOLIN_MISSING_TOKEN",
+] as const;
+const previousEnv = Object.fromEntries(
+  envNames.map((name) => [name, process.env[name]]),
+);
+process.env.GONDOLIN_TEST_TOKEN = "environment-token";
+process.env.GONDOLIN_TEST_TOKEN_2 = "second-environment-token";
+process.env.GONDOLIN_TEST_EMPTY_TOKEN = "";
+delete process.env.GONDOLIN_MISSING_TOKEN;
+
+try {
+  const envProjectDir = fs.mkdtempSync(path.join(os.tmpdir(), "gondolin-settings-env-"));
+  fs.writeFileSync(
+    path.join(envProjectDir, GONDOLIN_SETTINGS_JSON_FILE),
+    JSON.stringify({
+      secrets: {
+        TOKEN: {
+          hosts: ["api.example.com", "*.example.com"],
+          value: "${env.GONDOLIN_TEST_TOKEN}",
+        },
+        SECOND_TOKEN: {
+          hosts: ["second.example.com"],
+          value: "${env.GONDOLIN_TEST_TOKEN_2}",
+        },
+        EMPTY_TOKEN: {
+          hosts: ["empty.example.com"],
+          value: "${env.GONDOLIN_TEST_EMPTY_TOKEN}",
+        },
+        LITERAL_TOKEN: {
+          hosts: ["literal.example.com"],
+          value: "literal-value",
+        },
+        EMBEDDED_REFERENCE: {
+          hosts: ["embedded.example.com"],
+          value: "prefix-${env.GONDOLIN_TEST_TOKEN}",
+        },
+        INVALID_REFERENCE: {
+          hosts: ["invalid.example.com"],
+          value: "${env.1NOT_A_VALID_NAME}",
+        },
+      },
+    }),
+  );
+
+  assert.deepEqual(loadGondolinSettings(envProjectDir).secrets, {
+    TOKEN: {
+      hosts: ["api.example.com", "*.example.com"],
+      value: "environment-token",
+    },
+    SECOND_TOKEN: {
+      hosts: ["second.example.com"],
+      value: "second-environment-token",
+    },
+    EMPTY_TOKEN: {
+      hosts: ["empty.example.com"],
+      value: "",
+    },
+    LITERAL_TOKEN: {
+      hosts: ["literal.example.com"],
+      value: "literal-value",
+    },
+    EMBEDDED_REFERENCE: {
+      hosts: ["embedded.example.com"],
+      value: "prefix-${env.GONDOLIN_TEST_TOKEN}",
+    },
+    INVALID_REFERENCE: {
+      hosts: ["invalid.example.com"],
+      value: "${env.1NOT_A_VALID_NAME}",
+    },
+  });
+
+  const missingEnvProjectDir = fs.mkdtempSync(
+    path.join(os.tmpdir(), "gondolin-settings-missing-env-"),
+  );
+  fs.writeFileSync(
+    path.join(missingEnvProjectDir, GONDOLIN_SETTINGS_JSON_FILE),
+    JSON.stringify({
+      secrets: {
+        TOKEN: {
+          hosts: ["api.example.com"],
+          value: "${env.GONDOLIN_MISSING_TOKEN}",
+        },
+      },
+    }),
+  );
+  assert.throws(() => loadGondolinSettings(missingEnvProjectDir), {
+    message: new RegExp(
+      `field \\\"secrets\\.TOKEN\\.value\\\" references unset environment variable \\\"GONDOLIN_MISSING_TOKEN\\\"`,
+    ),
+  });
+} finally {
+  for (const name of envNames) {
+    const value = previousEnv[name];
+    if (value === undefined) delete process.env[name];
+    else process.env[name] = value;
+  }
+}
+
 const legacyProjectDir = fs.mkdtempSync(path.join(os.tmpdir(), "gondolin-settings-legacy-"));
 fs.writeFileSync(
   path.join(legacyProjectDir, GONDOLIN_SETTINGS_FILE),

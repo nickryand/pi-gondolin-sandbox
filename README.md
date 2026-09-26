@@ -134,7 +134,20 @@ The project directory itself is always mounted read-write at `/workspace/<projec
 }
 ```
 
-Secret values are read by the host and should not be committed to project configuration. The guest never receives the real value; it only receives Gondolin's generated placeholder.
+Secret values are read by the host and should not be committed to project configuration. The guest never receives the real value; it only receives Gondolin's generated placeholder. To read a value from the host process environment, use an exact `${env.NAME}` reference:
+
+```json
+{
+  "secrets": {
+    "GITHUB_TOKEN": {
+      "hosts": ["api.github.com"],
+      "value": "${env.GITHUB_TOKEN}"
+    }
+  }
+}
+```
+
+The extension errors during configuration loading when the referenced environment variable is not set.
 
 ### Network policy and request panel
 
