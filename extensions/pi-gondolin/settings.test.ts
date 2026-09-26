@@ -63,6 +63,11 @@ fs.writeFileSync(
       cpus: 4,
       memory: "8G",
     },
+    listeners: [
+      { prefix: "/app", port: 3000 },
+      { prefix: "/api", port: 8080, stripPrefix: false },
+    ],
+    ingress: { host: "127.0.0.1", port: 9000 },
     secrets: {
       GITHUB_TOKEN: {
         hosts: ["api.github.com"],
@@ -113,6 +118,11 @@ assert.deepEqual(settings.vm, {
   cpus: 4,
   memory: "8G",
 });
+assert.deepEqual(settings.listeners, [
+  { prefix: "/app", port: 3000 },
+  { prefix: "/api", port: 8080, stripPrefix: false },
+]);
+assert.deepEqual(settings.ingress, { host: "127.0.0.1", port: 9000 });
 assert.deepEqual(settings.secrets, {
   GITHUB_TOKEN: {
     hosts: ["api.github.com"],
@@ -137,6 +147,8 @@ for (const [name, settingsJson, message] of [
     { secrets: false },
     'field "secrets" must be an object',
   ],
+  ["listeners-non-array", { listeners: {} }, 'field "listeners" must be an array'],
+  ["listener-invalid-port", { listeners: [{ prefix: "/x", port: 65536 }] }, 'listeners\\[0\\]\\.port'],
   [
     "secret-hosts-non-array",
     { secrets: { TOKEN: { hosts: "api.github.com", value: "secret" } } },

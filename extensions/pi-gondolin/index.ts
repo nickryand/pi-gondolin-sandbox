@@ -409,6 +409,8 @@ export default function (pi: ExtensionAPI) {
     const configuredTcpMap = networkSettings.tcpMap ?? {};
     const hasTcpMap = Object.keys(configuredTcpMap).length > 0;
     const secrets = gondolinSettings.secrets ?? {};
+    const listeners = gondolinSettings.listeners ?? [];
+    const ingressSettings = gondolinSettings.ingress ?? {};
 
     return {
       additionalMountSpecs,
@@ -419,12 +421,15 @@ export default function (pi: ExtensionAPI) {
       configuredTcpMap,
       hasTcpMap,
       secrets,
+      listeners,
+      ingressSettings,
     };
   }
 
   let runtimeSettings = readRuntimeSettings();
 
   let vm: GondolinVM | null = null;
+  let ingressAccess: { url: string; close(): Promise<void> } | null = null;
   let vmStarting: Promise<GondolinVM> | null = null;
   let imageEnsuring: Promise<boolean> | null = null;
   let networkPanelDone: ((result?: void) => void) | null = null;
@@ -786,6 +791,24 @@ export default function (pi: ExtensionAPI) {
         },
       });
 
+      if (runtimeSettings.listeners.length > 0) {
+        try {
+          created.setIngressRoutes(
+            runtimeSettings.listeners.map((route) => ({
+              ...route,
+              stripPrefix: route.stripPrefix ?? true,
+            })),
+          );
+          ingressAccess = await created.enableIngress({
+            listenHost: runtimeSettings.ingressSettings.host ?? "127.0.0.1",
+            listenPort: runtimeSettings.ingressSettings.port ?? 0,
+          });
+        } catch (error) {
+          await created.close();
+          throw error;
+        }
+      }
+
       vm = created;
       ctx?.ui.setStatus(
         "gondolin",
@@ -795,7 +818,7 @@ export default function (pi: ExtensionAPI) {
         ),
       );
       ctx?.ui.notify(
-        `Gondolin VM ready. Host ${localCwd} mounted at ${guestProjectWorkspace}${formatVmResources()}`,
+        `Gondolin VM ready. Host ${localCwd} mounted at ${guestProjectWorkspace}${formatVmResources()}${ingressAccess ? `; listeners available at ${ingressAccess.url}` : ""}`,
         "info",
       );
       return created;
@@ -811,8 +834,11 @@ export default function (pi: ExtensionAPI) {
       ctx.ui.theme.fg("muted", "Gondolin: stopping"),
     );
     try {
+      await ingressAccess?.close();
+      ingressAccess = null;
       await vm.close();
     } finally {
+      ingressAccess = null;
       vm = null;
       vmStarting = null;
     }

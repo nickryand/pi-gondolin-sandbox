@@ -86,7 +86,7 @@ The command notification also includes an example showing the optional mounts sy
   "secrets": {
     "GITHUB_TOKEN": {
       "hosts": ["api.github.com"],
-      "value": "set-this-on-the-host"
+      "value": "${env.GITHUB_TOKEN}"
     }
   },
   "network": {
@@ -158,6 +158,25 @@ The extension errors during configuration loading when the referenced environmen
 * Add hostnames or wildcard entries such as `api.github.com` or `*.npmjs.org` to allow only those hosts.
 
 `network.tcpMap` mirrors Gondolin's `--tcp-map` and maps guest `HOST[:PORT]` names to upstream `HOST:PORT` endpoints. When a TCP map is configured, the extension automatically enables synthetic per-host DNS inside Gondolin and records TCP allow/deny events from Gondolin's network debug log.
+
+### Exposing guest listeners
+
+Configure one or more native Gondolin HTTP ingress routes with `listeners`. Each route maps an external path prefix to a port on guest loopback. The host gateway starts only when at least one route is configured. By default it binds to `127.0.0.1` on an ephemeral port; the ready notification reports its URL. Optional `ingress.host` and `ingress.port` choose the bind address and port (`0` selects an ephemeral port). Binding beyond loopback may expose the service to other machines, so configure that deliberately.
+
+```json
+{
+  "listeners": [
+    { "prefix": "/", "port": 3000 },
+    { "prefix": "/api", "port": 8080, "stripPrefix": false }
+  ],
+  "ingress": {
+    "host": "127.0.0.1",
+    "port": 0
+  }
+}
+```
+
+`stripPrefix` defaults to `true`. Settings changes take effect after `/gondolin reload`. Gondolin's native listener routing and HTTP gateway handle the forwarding; the plugin does not create a separate proxy.
 
 The network panel opens automatically by default. Set `network.panel` to `false` or `network.panel.enabled` to `false` to disable the automatic panel; `/gondolin panel` or the configured expand shortcut can still show it manually. Set `network.panel.expandShortcut` to change the expand/collapse keybinding from `alt+m`.
 
