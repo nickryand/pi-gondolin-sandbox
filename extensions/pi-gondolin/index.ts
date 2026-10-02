@@ -409,8 +409,8 @@ export default function (pi: ExtensionAPI) {
     const configuredTcpMap = networkSettings.tcpMap ?? {};
     const hasTcpMap = Object.keys(configuredTcpMap).length > 0;
     const secrets = gondolinSettings.secrets ?? {};
-    const listeners = gondolinSettings.listeners ?? [];
-    const ingressSettings = gondolinSettings.ingress ?? {};
+    const listeners = networkSettings.listeners ?? [];
+    const ingressSettings = networkSettings.ingress ?? {};
 
     return {
       additionalMountSpecs,

@@ -41,6 +41,8 @@ export interface GondolinNetworkSettings {
   allowHosts?: string[];
   tcpMap?: Record<string, string>;
   panel?: boolean | GondolinNetworkPanelSettings;
+  listeners?: GondolinListenerRoute[];
+  ingress?: GondolinIngressSettings;
   [key: string]: unknown;
 }
 
@@ -73,8 +75,6 @@ export interface GondolinSettings {
   network?: GondolinNetworkSettings;
   vm?: GondolinVmSettings;
   secrets?: Record<string, GondolinSecretSpec>;
-  listeners?: GondolinListenerRoute[];
-  ingress?: GondolinIngressSettings;
   [key: string]: unknown;
 }
 
@@ -125,16 +125,6 @@ export function loadGondolinSettings(
     throw new Error(`${settingsPath} field "vm" must be an object`);
   }
 
-  const listeners = parsed.listeners;
-  if (listeners !== undefined && !Array.isArray(listeners)) {
-    throw new Error(`${settingsPath} field "listeners" must be an array`);
-  }
-
-  const ingress = parsed.ingress;
-  if (ingress !== undefined && !isPlainObject(ingress)) {
-    throw new Error(`${settingsPath} field "ingress" must be an object`);
-  }
-
   const secrets = parsed.secrets;
   if (secrets !== undefined && !isPlainObject(secrets)) {
     throw new Error(`${settingsPath} field "secrets" must be an object`);
@@ -150,12 +140,6 @@ export function loadGondolinSettings(
     ...(secrets !== undefined
       ? { secrets: normalizeSecrets(secrets, settingsPath) }
       : {}),
-    ...(listeners !== undefined
-      ? { listeners: normalizeListeners(listeners, settingsPath) }
-      : {}),
-    ...(ingress !== undefined
-      ? { ingress: normalizeIngress(ingress, settingsPath) }
-      : {}),
   };
 }
 
@@ -164,7 +148,7 @@ function normalizeListeners(
   settingsPath: string,
 ): GondolinListenerRoute[] {
   return listeners.map((route, index) => {
-    const field = `listeners[${index}]`;
+    const field = `network.listeners[${index}]`;
     if (!isPlainObject(route)) {
       throw new Error(`${settingsPath} field "${field}" must be an object`);
     }
@@ -192,13 +176,13 @@ function normalizeIngress(
   const normalized: GondolinIngressSettings = {};
   if (ingress.host !== undefined) {
     if (typeof ingress.host !== "string" || ingress.host.length === 0) {
-      throw new Error(`${settingsPath} field "ingress.host" must be a non-empty string`);
+      throw new Error(`${settingsPath} field "network.ingress.host" must be a non-empty string`);
     }
     normalized.host = ingress.host;
   }
   if (ingress.port !== undefined) {
     if (!Number.isInteger(ingress.port) || ingress.port < 0 || ingress.port > 65535) {
-      throw new Error(`${settingsPath} field "ingress.port" must be an integer from 0 to 65535`);
+      throw new Error(`${settingsPath} field "network.ingress.port" must be an integer from 0 to 65535`);
     }
     normalized.port = ingress.port;
   }
@@ -280,6 +264,20 @@ function normalizeNetworkSettings(
   settingsPath: string,
 ): GondolinNetworkSettings {
   const normalized: GondolinNetworkSettings = { ...network };
+
+  if (network.listeners !== undefined) {
+    if (!Array.isArray(network.listeners)) {
+      throw new Error(`${settingsPath} field "network.listeners" must be an array`);
+    }
+    normalized.listeners = normalizeListeners(network.listeners, settingsPath);
+  }
+
+  if (network.ingress !== undefined) {
+    if (!isPlainObject(network.ingress)) {
+      throw new Error(`${settingsPath} field "network.ingress" must be an object`);
+    }
+    normalized.ingress = normalizeIngress(network.ingress, settingsPath);
+  }
 
   if (network.allowHosts !== undefined) {
     if (!Array.isArray(network.allowHosts)) {

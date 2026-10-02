@@ -161,17 +161,19 @@ The extension errors during configuration loading when the referenced environmen
 
 ### Exposing guest listeners
 
-Configure one or more native Gondolin HTTP ingress routes with `listeners`. Each route maps an external path prefix to a port on guest loopback. The host gateway starts only when at least one route is configured. By default it binds to `127.0.0.1` on an ephemeral port; the ready notification reports its URL. Optional `ingress.host` and `ingress.port` choose the bind address and port (`0` selects an ephemeral port). Binding beyond loopback may expose the service to other machines, so configure that deliberately.
+Configure one or more native Gondolin HTTP ingress routes with `network.listeners`. Each route maps an external path prefix to a port on guest loopback. The host gateway starts only when at least one route is configured. By default it binds to `127.0.0.1` on an ephemeral port; the ready notification reports its URL. Optional `network.ingress.host` and `network.ingress.port` choose the bind address and port (`0` selects an ephemeral port). Binding beyond loopback may expose the service to other machines, so configure that deliberately.
 
 ```json
 {
-  "listeners": [
-    { "prefix": "/", "port": 3000 },
-    { "prefix": "/api", "port": 8080, "stripPrefix": false }
-  ],
-  "ingress": {
-    "host": "127.0.0.1",
-    "port": 0
+  "network": {
+    "listeners": [
+      { "prefix": "/", "port": 3000 },
+      { "prefix": "/api", "port": 8080, "stripPrefix": false }
+    ],
+    "ingress": {
+      "host": "127.0.0.1",
+      "port": 0
+    }
   }
 }
 ```

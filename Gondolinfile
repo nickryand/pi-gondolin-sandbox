@@ -21,7 +21,8 @@
       "jujutsu",
       "ripgrep",
       "openssl",
-      "github-cli"
+      "github-cli",
+      "build-base"
     ],
     "initramfsPackages": [],
     "krunfwVersion": "v5.2.1"
