@@ -33,7 +33,8 @@
   },
   "postBuild": {
     "commands": [
-      "export RUSTUP_HOME=/usr/local/rustup CARGO_HOME=/usr/local/cargo PATH=/usr/local/cargo/bin:$PATH; rustup-init -y --no-modify-path --default-toolchain stable; chmod -R a+rX /usr/local/rustup /usr/local/cargo"
+      "export RUSTUP_HOME=/usr/local/rustup CARGO_HOME=/usr/local/cargo PATH=/usr/local/cargo/bin:$PATH; rustup-init -y --no-modify-path --default-toolchain stable; chmod -R a+rX /usr/local/rustup /usr/local/cargo",
+      "npm install --global hunkdiff"
     ]
   },
   "env": {

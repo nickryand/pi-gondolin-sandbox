@@ -1,0 +1,12 @@
+FROM docker.io/debian:trixie-slim
+
+RUN apt update -y \
+ && apt install -y curl build-essential
+
+ENV RUSTUP_HOME=/usr/local/rustup \
+    CARGO_HOME=/usr/local/cargo \
+    PATH=/usr/local/cargo/bin:$PATH
+
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+    | sh -s -- -y --no-modify-path --default-toolchain stable \
+    && curl -fsSL https://hunk.dev/install.sh | HUNK_INSTALL_DIR=/usr/local/bin sh
