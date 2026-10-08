@@ -70,6 +70,16 @@ The command notification also includes an example showing the optional mounts sy
     "cpus": 4,
     "memory": "8G"
   },
+  "commands": [
+    {
+      "args": ["/usr/bin/hunk", "server", "--port", "8585"],
+      "log": true
+    },
+    {
+      "args": ["/usr/bin/metrics-agent"],
+      "log": false
+    }
+  ],
   "mounts": {
     "/cache": "./.cache",
     "/readonly-data": {
@@ -103,11 +113,35 @@ The command notification also includes an example showing the optional mounts sy
 }
 ```
 
+Each entry in the `commands` array starts inside the guest after it boots and does not block pi. Its `args` is an argv array executed directly (not shell-parsed). Both output streams are piped and drained for every command. The `log` option defaults to `true`; set it to `false` to disable output and launch logging for that command. Logs include stream labels and timestamps. Logs rotate at 10 MiB, retaining up to five files (`command_1.log` through `command_5.log`), with `command_1.log` active. Pi is notified when each command starts and stops. Gondolin allows up to 64 concurrent or queued execs by default.
+
 ### Image selection and builds
 
 Use `image.tag` (or top-level `imageTag`) to select the Gondolin image for the sandbox. Before the VM starts, the extension checks the local image store through the Gondolin SDK. If the image is missing and the project contains `Gondolinfile`, it builds the image through the SDK using that file as the build configuration, imports the result into the local image store, and tags it with the configured tag.
 
 Build metadata is stored in `.gondolin/image-build.json`. If the `Gondolinfile` modification time is newer than that metadata, the image is rebuilt. If a rebuild happens while a VM is already running, pi will prompt you to run `/gondolin reload` so the VM starts using the new image. Add `.gondolin/` to your project `.gitignore` to ignore the build metadata cache.
+
+#### Build a Gondolin image from an OCI base image
+
+Gondolin can use an OCI image as the guest root filesystem. First build and tag the OCI image with Docker or Podman. For example, from the repository root:
+
+```bash
+podman build -t localhost/custom-debian:latest \
+  -f images/Containerfile.debian images
+```
+
+Then build a Gondolin image that uses it:
+
+```bash
+gondolin build \
+  --config images/Gondolinfile.debian \
+  --tag custom-debian:latest \
+  --output "$HOME/gondolin-custom-debian"
+```
+
+The build config's `oci.image` must match the OCI tag (`localhost/custom-debian:latest` in this example). The `env` section sets environment defaults in the resulting guest. The `distro` setting controls Gondolin's supporting guest assets; it does not change the OCI root filesystem's distribution. To use the built image in this extension, set `image.tag` in `.gondolin.json` to `custom-debian:latest`.
+
+Docker can be used instead of Podman by replacing `podman build` with `docker build`. The explicit output directory keeps large generated assets off `/tmp`, which may have per-user quotas; choose a location with enough free space for the root filesystem image.
 
 ### VM resources
 

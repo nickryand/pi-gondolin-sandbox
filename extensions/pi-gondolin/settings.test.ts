@@ -68,6 +68,10 @@ fs.writeFileSync(
       cpus: 4,
       memory: "8G",
     },
+    commands: [
+      { args: ["/usr/bin/hunk", "server"], log: true },
+      { args: ["/usr/bin/agent"], log: false },
+    ],
     secrets: {
       GITHUB_TOKEN: {
         hosts: ["api.github.com"],
@@ -123,6 +127,10 @@ assert.deepEqual(settings.vm, {
   cpus: 4,
   memory: "8G",
 });
+assert.deepEqual(settings.commands, [
+  { args: ["/usr/bin/hunk", "server"], log: true },
+  { args: ["/usr/bin/agent"], log: false },
+]);
 assert.deepEqual(settings.network?.listeners, [
   { prefix: "/app", port: 3000 },
   { prefix: "/api", port: 8080, stripPrefix: false },
@@ -136,6 +144,10 @@ assert.deepEqual(settings.secrets, {
 });
 
 for (const [name, settingsJson, message] of [
+  ["commands-non-array", { commands: {} }, 'field "commands" must be an array'],
+  ["commands-entry-non-object", { commands: [false] }, 'commands\\[0\\]" must be an object'],
+  ["commands-args-invalid", { commands: [{ args: "echo" }] }, 'commands\\[0\\]\\.args'],
+  ["commands-log-invalid", { commands: [{ args: ["echo"], log: "yes" }] }, 'commands\\[0\\]\\.log" must be a boolean'],
   ["vm-non-object", { vm: false }, 'field "vm" must be an object'],
   [
     "invalid-cpus",

@@ -57,6 +57,11 @@ export interface GondolinIngressSettings {
   port?: number;
 }
 
+export interface GondolinCommandSettings {
+  args: string[];
+  log?: boolean;
+}
+
 export interface GondolinVmSettings {
   cpus?: number;
   memory?: string;
@@ -74,6 +79,7 @@ export interface GondolinSettings {
   image?: GondolinImageSettings;
   network?: GondolinNetworkSettings;
   vm?: GondolinVmSettings;
+  commands?: GondolinCommandSettings[];
   secrets?: Record<string, GondolinSecretSpec>;
   [key: string]: unknown;
 }
@@ -125,6 +131,11 @@ export function loadGondolinSettings(
     throw new Error(`${settingsPath} field "vm" must be an object`);
   }
 
+  const commands = parsed.commands;
+  if (commands !== undefined && !Array.isArray(commands)) {
+    throw new Error(`${settingsPath} field "commands" must be an array`);
+  }
+
   const secrets = parsed.secrets;
   if (secrets !== undefined && !isPlainObject(secrets)) {
     throw new Error(`${settingsPath} field "secrets" must be an object`);
@@ -137,6 +148,14 @@ export function loadGondolinSettings(
       ? { network: normalizeNetworkSettings(network, settingsPath) }
       : {}),
     ...(vm !== undefined ? { vm: normalizeVmSettings(vm, settingsPath) } : {}),
+    ...(commands !== undefined
+      ? { commands: commands.map((item, index) => {
+          if (!isPlainObject(item)) {
+            throw new Error(`${settingsPath} field "commands[${index}]" must be an object`);
+          }
+          return normalizeCommandSettings(item, settingsPath, index);
+        }) }
+      : {}),
     ...(secrets !== undefined
       ? { secrets: normalizeSecrets(secrets, settingsPath) }
       : {}),
@@ -230,6 +249,24 @@ function normalizeSecrets(
   }
 
   return normalized;
+}
+
+function normalizeCommandSettings(
+  command: Record<string, unknown>,
+  settingsPath: string,
+  index: number,
+): GondolinCommandSettings {
+  const field = `commands[${index}]`;
+  if (!Array.isArray(command.args) || command.args.length === 0 || command.args.some((arg) => typeof arg !== "string")) {
+    throw new Error(`${settingsPath} field "${field}.args" must be a non-empty array of strings`);
+  }
+  if (command.log !== undefined && typeof command.log !== "boolean") {
+    throw new Error(`${settingsPath} field "${field}.log" must be a boolean`);
+  }
+  return {
+    args: command.args as string[],
+    ...(command.log !== undefined ? { log: command.log as boolean } : {}),
+  };
 }
 
 function normalizeVmSettings(

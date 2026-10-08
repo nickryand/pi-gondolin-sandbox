@@ -58,6 +58,7 @@ import {
 } from "@earendil-works/pi-tui";
 
 import { ensureGondolinImage } from "./image.ts";
+import { RotatingCommandLog } from "./command-log.ts";
 import {
   GONDOLIN_SETTINGS_JSON_FILE,
   getGondolinImageTag,
@@ -421,6 +422,7 @@ export default function (pi: ExtensionAPI) {
       configuredTcpMap,
       hasTcpMap,
       secrets,
+      commands: gondolinSettings.commands,
       listeners,
       ingressSettings,
     };
@@ -810,6 +812,7 @@ export default function (pi: ExtensionAPI) {
       }
 
       vm = created;
+      startConfiguredCommands(created, ctx);
       ctx?.ui.setStatus(
         "gondolin",
         ctx.ui.theme.fg(
@@ -818,13 +821,62 @@ export default function (pi: ExtensionAPI) {
         ),
       );
       ctx?.ui.notify(
-        `Gondolin VM ready. Host ${localCwd} mounted at ${guestProjectWorkspace}${formatVmResources()}${ingressAccess ? `; listeners available at ${ingressAccess.url}` : ""}`,
+        `Gondolin VM ready. Host ${localCwd} mounted at ${guestProjectWorkspace}${formatVmResources()}${ingressAccess ? `; listeners available at ${ingressAccess.url}` : ""}${runtimeSettings.commands?.length ? `\nProcess started: ${runtimeSettings.commands.map((command) => command.args.join(" ")).join("; ")}` : ""}`,
         "info",
       );
       return created;
     })();
 
     return vmStarting;
+  }
+
+  function startConfiguredCommands(activeVm: GondolinVM, ctx?: ExtensionContext) {
+    const commands = runtimeSettings.commands ?? [];
+    if (commands.length === 0) return;
+    let log: RotatingCommandLog | null = null;
+    if (commands.some((command) => command.log !== false)) {
+      try {
+        log = new RotatingCommandLog(path.join(localCwd, ".gondolin"));
+      } catch (error) {
+        ctx?.ui.notify(`Could not open Gondolin command log: ${String(error)}`, "error");
+        return;
+      }
+    }
+
+    for (const command of commands) {
+      let proc: ReturnType<GondolinVM["exec"]>;
+      try {
+        proc = activeVm.exec(command.args, {
+          stdout: "pipe",
+          stderr: "pipe",
+        });
+      } catch (error) {
+        ctx?.ui.notify(`Could not start Gondolin command: ${String(error)}`, "error");
+        continue;
+      }
+      if (command.log !== false) {
+        log!.write("process", Buffer.from(`launched: ${JSON.stringify(command.args)}`));
+      }
+      ctx?.ui.notify(`Gondolin command started: ${command.args.join(" ")}`, "info");
+
+      void (async () => {
+        try {
+          for await (const chunk of proc.output()) {
+            if (command.log !== false) log!.write(chunk.stream, chunk.data);
+          }
+        } catch (error) {
+          ctx?.ui.notify(`Gondolin command output error: ${String(error)}`, "warning");
+        }
+      })();
+      void proc.result.then(
+        (result) => {
+          ctx?.ui.notify(`Gondolin command stopped (exit ${result.exitCode}): ${command.args.join(" ")}`, "info");
+        },
+        (error) => {
+          ctx?.ui.notify(`Gondolin command stopped: ${String(error)}: ${command.args.join(" ")}`, "warning");
+        },
+      );
+    }
   }
 
   async function stopVm(ctx?: ExtensionContext) {
