@@ -22,6 +22,7 @@ export interface GondolinMountSpec {
   path?: string;
   hostPath?: string;
   root?: string;
+  createHostDir?: boolean;
   options?: Record<string, unknown>;
   [key: string]: unknown;
 }
@@ -404,6 +405,10 @@ export function normalizeMountSpecs(
 
     if (!isPlainObject(spec)) {
       throw new Error(`mount ${guestPath} must be a string path or object`);
+    }
+
+    if (spec.createHostDir !== undefined && typeof spec.createHostDir !== "boolean") {
+      throw new Error(`mount ${guestPath} field "createHostDir" must be a boolean`);
     }
 
     const hostPathKey = ["path", "hostPath", "root"].find(

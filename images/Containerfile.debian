@@ -1,7 +1,20 @@
-FROM docker.io/debian:trixie-slim
+FROM docker.io/debian:trixie-slim AS jj-builder
 
 RUN apt update -y \
- && apt install -y curl build-essential
+ && apt install -y curl \
+ && release_url=$(curl -sS -o /dev/null -w '%{redirect_url}' https://github.com/jj-vcs/jj/releases/latest) \
+ && version=${release_url##*/} \
+ && curl -fsSL "https://github.com/jj-vcs/jj/releases/download/${version}/jj-${version}-x86_64-unknown-linux-musl.tar.gz" \
+    | tar -xz -C /usr/local/bin
+
+FROM docker.io/debian:trixie-slim
+
+ENV HUNK_VERSION "0.22.0"
+
+COPY --from=jj-builder /usr/local/bin/jj /usr/local/bin/jj
+
+RUN apt update -y \
+ && apt install -y curl build-essential openssh-server net-tools git
 
 ENV RUSTUP_HOME=/usr/local/rustup \
     CARGO_HOME=/usr/local/cargo \
@@ -9,4 +22,4 @@ ENV RUSTUP_HOME=/usr/local/rustup \
 
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
     | sh -s -- -y --no-modify-path --default-toolchain stable \
-    && curl -fsSL https://hunk.dev/install.sh | HUNK_INSTALL_DIR=/usr/local/bin sh
+    && curl -fsSL https://hunk.dev/install.sh | HUNK_INSTALL_DIR=/usr/local/bin HUNK_VERSION=${HUNK_VERSION} sh

@@ -11,6 +11,7 @@
   "env": {
     "RUSTUP_HOME": "/usr/local/rustup",
     "CARGO_HOME": "/usr/local/cargo",
-    "PATH": "/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+    "PATH": "/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+    "XDG_RUNTIME_DIR": "/hunk"
   }
 }

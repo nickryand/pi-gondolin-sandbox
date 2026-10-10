@@ -501,6 +501,7 @@ export default function (pi: ExtensionAPI) {
       hostPath: _hostPath,
       path: _path,
       root: _root,
+      createHostDir,
       options,
       ...rest
     } = spec;
@@ -520,6 +521,10 @@ export default function (pi: ExtensionAPI) {
     for (const [guestPath, spec] of Object.entries(
       runtimeSettings.additionalMountSpecs,
     )) {
+      if (spec.createHostDir === true) {
+        const hostPath = spec.hostPath ?? spec.path ?? spec.root;
+        if (typeof hostPath === "string") fs.mkdirSync(hostPath, { recursive: true });
+      }
       if (guestPath === guestProjectWorkspace) {
         throw new Error(
           `${guestProjectWorkspace} is reserved for the project mount`,

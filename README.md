@@ -150,7 +150,7 @@ Set `vm.cpus` and `vm.memory` to configure the Gondolin virtual machine resource
 
 ### Additional mounts
 
-Mount keys are absolute guest paths. Values may be a host path string or an object with `path`, `hostPath`, or `root`. Relative host paths are resolved from the project directory. All other fields, plus nested `options`, are passed through to Gondolin's `RealFSProvider` options.
+Mount keys are absolute guest paths. Values may be a host path string or an object with `path`, `hostPath`, or `root`. Relative host paths are resolved from the project directory. Set `createHostDir` to `true` on a mount object to create its host directory recursively if it does not exist; it defaults to `false`. All other fields, plus nested `options`, are passed through to Gondolin's `RealFSProvider` options.
 
 The project directory itself is always mounted read-write at `/workspace/<project-folder-name>`. Additional mounts cannot replace that reserved project mount.
 
