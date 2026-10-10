@@ -78,6 +78,7 @@ export interface GondolinSettings {
   imageTag?: string;
   image?: GondolinImageSettings;
   network?: GondolinNetworkSettings;
+  ssh?: boolean;
   vm?: GondolinVmSettings;
   commands?: GondolinCommandSettings[];
   secrets?: Record<string, GondolinSecretSpec>;
@@ -131,6 +132,11 @@ export function loadGondolinSettings(
     throw new Error(`${settingsPath} field "vm" must be an object`);
   }
 
+  const ssh = parsed.ssh;
+  if (ssh !== undefined && typeof ssh !== "boolean") {
+    throw new Error(`${settingsPath} field "ssh" must be a boolean`);
+  }
+
   const commands = parsed.commands;
   if (commands !== undefined && !Array.isArray(commands)) {
     throw new Error(`${settingsPath} field "commands" must be an array`);
@@ -144,6 +150,7 @@ export function loadGondolinSettings(
   return {
     ...parsed,
     mounts: mounts as Record<string, string | GondolinMountSpec>,
+    ...(ssh !== undefined ? { ssh } : {}),
     ...(network !== undefined
       ? { network: normalizeNetworkSettings(network, settingsPath) }
       : {}),

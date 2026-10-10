@@ -416,6 +416,7 @@ export default function (pi: ExtensionAPI) {
     return {
       additionalMountSpecs,
       imageTag,
+      ssh: gondolinSettings.ssh ?? false,
       networkSettings,
       vmSettings,
       configuredAllowHosts,
@@ -432,6 +433,7 @@ export default function (pi: ExtensionAPI) {
 
   let vm: GondolinVM | null = null;
   let ingressAccess: { url: string; close(): Promise<void> } | null = null;
+  let sshAccess: Awaited<ReturnType<GondolinVM["enableSsh"]>> | null = null;
   let vmStarting: Promise<GondolinVM> | null = null;
   let imageEnsuring: Promise<boolean> | null = null;
   let networkPanelDone: ((result?: void) => void) | null = null;
@@ -811,6 +813,17 @@ export default function (pi: ExtensionAPI) {
         }
       }
 
+      if (runtimeSettings.ssh) {
+        try {
+          sshAccess = await created.enableSsh();
+        } catch (error) {
+          await ingressAccess?.close();
+          ingressAccess = null;
+          await created.close();
+          throw error;
+        }
+      }
+
       vm = created;
       startConfiguredCommands(created, ctx);
       ctx?.ui.setStatus(
@@ -821,7 +834,7 @@ export default function (pi: ExtensionAPI) {
         ),
       );
       ctx?.ui.notify(
-        `Gondolin VM ready. Host ${localCwd} mounted at ${guestProjectWorkspace}${formatVmResources()}${ingressAccess ? `; listeners available at ${ingressAccess.url}` : ""}${runtimeSettings.commands?.length ? `\nProcess started: ${runtimeSettings.commands.map((command) => command.args.join(" ")).join("; ")}` : ""}`,
+        `Gondolin VM ready. Host ${localCwd} mounted at ${guestProjectWorkspace}${formatVmResources()}${ingressAccess ? `; listeners available at ${ingressAccess.url}` : ""}${sshAccess ? `; SSH listener: ${sshAccess.host}:${sshAccess.port}; ${sshAccess.command} (identity: ${sshAccess.identityFile})` : ""}${runtimeSettings.commands?.length ? `\nProcess started: ${runtimeSettings.commands.map((command) => command.args.join(" ")).join("; ")}` : ""}`,
         "info",
       );
       return created;
@@ -888,9 +901,12 @@ export default function (pi: ExtensionAPI) {
     try {
       await ingressAccess?.close();
       ingressAccess = null;
+      await sshAccess?.close();
+      sshAccess = null;
       await vm.close();
     } finally {
       ingressAccess = null;
+      sshAccess = null;
       vm = null;
       vmStarting = null;
     }

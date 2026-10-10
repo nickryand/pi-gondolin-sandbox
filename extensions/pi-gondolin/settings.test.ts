@@ -34,6 +34,7 @@ fs.writeFileSync(
     image: {
       tag: "pi-sandbox:test",
     },
+    ssh: true,
     mounts: {
       "/cache": "./.cache",
       "/readonly": {
@@ -87,6 +88,7 @@ const imageTag = getGondolinImageTag(settings);
 const imageBuildPlan = createGondolinImageBuildPlan(projectDir, imageTag!);
 
 assert.equal(imageTag, "pi-sandbox:test");
+assert.equal(settings.ssh, true);
 assert.deepEqual(imageBuildPlan, {
   imageTag: "pi-sandbox:test",
   gondolinfilePath: path.join(projectDir, "Gondolinfile"),
@@ -149,6 +151,7 @@ for (const [name, settingsJson, message] of [
   ["commands-args-invalid", { commands: [{ args: "echo" }] }, 'commands\\[0\\]\\.args'],
   ["commands-log-invalid", { commands: [{ args: ["echo"], log: "yes" }] }, 'commands\\[0\\]\\.log" must be a boolean'],
   ["vm-non-object", { vm: false }, 'field "vm" must be an object'],
+  ["ssh-non-boolean", { ssh: "yes" }, 'field "ssh" must be a boolean'],
   [
     "invalid-cpus",
     { vm: { cpus: 0 } },
