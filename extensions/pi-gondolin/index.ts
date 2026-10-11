@@ -53,6 +53,7 @@ import {
   matchesKey,
   truncateToWidth,
   visibleWidth,
+  wrapTextWithAnsi,
   type Component,
   type OverlayOptions,
 } from "@earendil-works/pi-tui";
@@ -839,7 +840,7 @@ export default function (pi: ExtensionAPI) {
         ),
       );
       ctx?.ui.notify(
-        `Gondolin VM ready. Host ${localCwd} mounted at ${guestProjectWorkspace}${formatVmResources()}${ingressAccess ? `; listeners available at ${ingressAccess.url}` : ""}${sshAccess ? `; SSH listener: ${sshAccess.host}:${sshAccess.port}; ${sshAccess.command} (identity: ${sshAccess.identityFile})` : ""}${runtimeSettings.commands?.length ? `\nProcess started: ${runtimeSettings.commands.map((command) => command.args.join(" ")).join("; ")}` : ""}`,
+        `Gondolin VM ready. Host ${localCwd} mounted at ${guestProjectWorkspace}${formatVmResources()}${runtimeSettings.commands?.length ? `\nProcess started: ${runtimeSettings.commands.map((command) => command.args.join(" ")).join("; ")}` : ""}`,
         "info",
       );
       return created;
@@ -1106,12 +1107,53 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("session_start", async (_event, ctx) => {
-    // Start eagerly so the user sees errors early (missing qemu, etc.)
+    // Let the user know VM startup is underway before waiting on image checks and VM creation.
+    ctx.ui.notify("Starting Gondolin VM...", "info");
     await ensureVm(ctx);
+    if (vm) {
+      ctx.ui.setHeader((_tui, theme) => {
+        const sectionTitle = (text: string) => theme.fg("accent", text);
+        const detail = (text: string) => theme.fg("dim", text);
+        const gondolinInfo = [
+          theme.fg("mdHeading", "[Gondolin]"),
+          `  ${sectionTitle("Image:")} ${detail(runtimeSettings.imageTag ?? "Gondolin default image")}`,
+          ...(runtimeSettings.listeners.length > 0
+            ? [
+                `  ${sectionTitle("Listeners:")}`,
+                ...runtimeSettings.listeners.map((listener) =>
+                  `    ${detail(`${listener.prefix} -> guest:${listener.port}`)}`,
+                ),
+              ]
+            : []),
+          ...(ingressAccess
+            ? [
+                `  ${sectionTitle("Ingress:")}`,
+                `    ${detail(ingressAccess.url)}`,
+              ]
+            : []),
+          ...(sshAccess ? [`  ${sectionTitle("SSH:")}`] : []),
+        ];
+        return {
+          render(width: number) {
+            const lines = [...gondolinInfo];
+            if (sshAccess) {
+              lines.push(
+                ...wrapTextWithAnsi(detail(sshAccess.command), Math.max(1, width - 4)).map(
+                  (line) => `    ${line}`,
+                ),
+              );
+            }
+            return lines.map((line) => truncateToWidth(line, width, "…"));
+          },
+          invalidate() {},
+        };
+      });
+    }
     if (shouldShowNetworkPanel()) showNetworkPanel(ctx);
   });
 
   pi.on("session_shutdown", async (_event, ctx) => {
+    ctx.ui.setHeader(undefined);
     hideNetworkPanel();
     await stopVm(ctx);
   });
