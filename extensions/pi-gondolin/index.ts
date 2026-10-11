@@ -957,15 +957,20 @@ export default function (pi: ExtensionAPI) {
 
   function initGondolinSettingsFromCommand(ctx?: ExtensionContext) {
     const settingsPath = path.join(localCwd, GONDOLIN_SETTINGS_JSON_FILE);
+    const projectTag = (path.basename(localCwd) || "project")
+      .replace(/[^A-Za-z0-9_.-]+/g, "-")
+      .replace(/^[^A-Za-z0-9_]+/, "")
+      .slice(0, 128) || "project";
+    const imageTag = `pi-sandbox:${projectTag}`;
     const settingsJson = `{
   "image": {
-    "tag": "pi-sandbox:latest"
+    "tag": "${imageTag}"
   }
 }
 `;
     const exampleSettingsJson = `{
   "image": {
-    "tag": "pi-sandbox:latest"
+    "tag": "${imageTag}"
   },
   "vm": {
     "cpus": 4,

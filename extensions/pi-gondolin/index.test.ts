@@ -53,7 +53,9 @@ assert.throws(() => toGuestPath(localCwd, "../../shared/file.txt"), {
   message: "path escapes workspace: ../../shared/file.txt",
 });
 
-const initProjectDir = fs.mkdtempSync(path.join(os.tmpdir(), "gondolin-init-"));
+const initTempDir = fs.mkdtempSync(path.join(os.tmpdir(), "gondolin-init-"));
+const initProjectDir = path.join(initTempDir, "test project!");
+fs.mkdirSync(initProjectDir);
 const previousCwd = process.cwd();
 let gondolinCommand:
   | { handler: (args: string, ctx: any) => Promise<void> }
@@ -87,14 +89,14 @@ assert.deepEqual(
     fs.readFileSync(path.join(initProjectDir, ".gondolin.json"), "utf8"),
   ),
   {
-    image: { tag: "pi-sandbox:latest" },
+    image: { tag: "pi-sandbox:test-project-" },
   },
 );
 assert.deepEqual(notifications, [
   {
     message: `Created .gondolin.json.\n\nExample .gondolin.json with optional mounts:\n{
   "image": {
-    "tag": "pi-sandbox:latest"
+    "tag": "pi-sandbox:test-project-"
   },
   "vm": {
     "cpus": 4,
