@@ -1,5 +1,11 @@
 {
   "image": {
     "tag": "pi-sandbox:default"
+  },
+  "mounts": {
+    "/workspace/gondolin": {
+      "path": "~/git/nonwork/gondolin/",
+      "readOnly": true
+    }
   }
 }

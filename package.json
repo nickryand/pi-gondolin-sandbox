@@ -2,7 +2,9 @@
   "name": "pi-gondolin",
   "version": "0.1.0",
   "type": "module",
-  "keywords": ["pi-package"],
+  "keywords": [
+    "pi-package"
+  ],
   "files": [
     "extensions/",
     "index.ts",
@@ -13,13 +15,15 @@
   ],
   "exports": "./index.ts",
   "dependencies": {
-    "@earendil-works/gondolin": "^0.12.0",
+    "@earendil-works/gondolin": "^0.13.0",
     "@earendil-works/pi-tui": "*"
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*"
   },
   "pi": {
-    "extensions": ["./extensions"]
+    "extensions": [
+      "./extensions"
+    ]
   }
 }

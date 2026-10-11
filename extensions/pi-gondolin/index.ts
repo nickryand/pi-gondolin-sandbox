@@ -418,6 +418,7 @@ export default function (pi: ExtensionAPI) {
       additionalMountSpecs,
       imageTag,
       ssh: gondolinSettings.ssh ?? false,
+      mapCreatedOwnership: gondolinSettings.mapCreatedOwnership ?? false,
       networkSettings,
       vmSettings,
       configuredAllowHosts,
@@ -825,6 +826,7 @@ export default function (pi: ExtensionAPI) {
         ...createNetworkOptions(),
         vfs: {
           mounts: createMounts(),
+          mapCreatedOwnership: runtimeSettings.mapCreatedOwnership,
         },
       });
 

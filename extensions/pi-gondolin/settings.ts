@@ -82,6 +82,7 @@ export interface GondolinSettings {
   image?: GondolinImageSettings;
   network?: GondolinNetworkSettings;
   ssh?: boolean;
+  mapCreatedOwnership?: boolean;
   vm?: GondolinVmSettings;
   commands?: GondolinCommandSettings[];
   secrets?: Record<string, GondolinSecretSpec>;
@@ -144,6 +145,11 @@ export function loadGondolinSettings(
     throw new Error(`${settingsPath} field "ssh" must be a boolean`);
   }
 
+  const mapCreatedOwnership = parsed.mapCreatedOwnership;
+  if (mapCreatedOwnership !== undefined && typeof mapCreatedOwnership !== "boolean") {
+    throw new Error(`${settingsPath} field "mapCreatedOwnership" must be a boolean`);
+  }
+
   const commands = parsed.commands;
   if (commands !== undefined && !Array.isArray(commands)) {
     throw new Error(`${settingsPath} field "commands" must be an array`);
@@ -158,6 +164,7 @@ export function loadGondolinSettings(
     ...parsed,
     mounts: mounts as Record<string, string | GondolinMountSpec>,
     ...(ssh !== undefined ? { ssh } : {}),
+    ...(mapCreatedOwnership !== undefined ? { mapCreatedOwnership } : {}),
     ...(network !== undefined
       ? { network: normalizeNetworkSettings(network, settingsPath) }
       : {}),

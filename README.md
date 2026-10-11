@@ -47,7 +47,7 @@ To ensure the AI agent remains "aware" of its environment, the extension:
 
 ## Project settings
 
-Create a JSON `.gondolin.json` file in the project directory to set the VM image tag, optionally enable SSH access, add more RealFS mounts, and configure limited network access. The extension also accepts the legacy `.gondolin` JSON filename, but `.gondolin.json` is preferred.
+Create a JSON `.gondolin.json` file in the project directory to set the VM image tag, optionally enable SSH access, configure created-file ownership mapping, add more RealFS mounts, and configure limited network access. The extension also accepts the legacy `.gondolin` JSON filename, but `.gondolin.json` is preferred.
 
 Run `/gondolin init` inside pi to create a minimal `.gondolin.json` if one does not already exist:
 
@@ -56,17 +56,19 @@ Run `/gondolin init` inside pi to create a minimal `.gondolin.json` if one does 
   "image": {
     "tag": "pi-sandbox:latest"
   },
-  "ssh": false
+  "ssh": false,
+  "mapCreatedOwnership": false
 }
 ```
 
-Set `ssh` to `true` to enable SSH access to the guest VM. It defaults to `false`. When enabled, the VM-ready notification includes an SSH command and temporary identity-file path. SSH access is closed and its temporary key material removed when the VM stops. The command notification also includes an example showing the optional mounts syntax. A fuller configuration can look like this:
+Set `ssh` to `true` to enable SSH access to the guest VM. It defaults to `false`. When enabled, the VM-ready notification includes an SSH command and temporary identity-file path. SSH access is closed and its temporary key material removed when the VM stops. Set `mapCreatedOwnership` to `true` to report the guest UID/GID for newly created entries on RealFS mounts; it defaults to `false` and applies to all VFS mounts. Restart the VM after changing this setting. The command notification also includes an example showing the optional mounts syntax. A fuller configuration can look like this:
 
 ```json
 {
   "image": {
     "tag": "pi-sandbox:latest"
   },
+  "mapCreatedOwnership": true,
   "vm": {
     "cpus": 4,
     "memory": "8G",
