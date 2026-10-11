@@ -514,6 +514,23 @@ export default function (pi: ExtensionAPI) {
     return new (RealFSProvider as any)(hostPath, providerOptions);
   }
 
+  function notifyMissingMountPaths(ctx?: ExtensionContext): string[] {
+    const missing: string[] = [];
+    for (const [guestPath, spec] of Object.entries(runtimeSettings.additionalMountSpecs)) {
+      const hostPath = spec.hostPath ?? spec.path ?? spec.root;
+      if (
+        typeof hostPath === "string" &&
+        spec.createHostDir !== true &&
+        !fs.existsSync(hostPath)
+      ) {
+        const message = `Mount error: host path for ${guestPath} was not found: ${hostPath}`;
+        ctx?.ui.notify(message, "error");
+        missing.push(message);
+      }
+    }
+    return missing;
+  }
+
   function createMounts() {
     const mounts: Record<string, any> = {
       [guestProjectWorkspace]: new RealFSProvider(localCwd),
@@ -547,6 +564,9 @@ export default function (pi: ExtensionAPI) {
     if (runtimeSettings.vmSettings.memory !== undefined) {
       options.memory = runtimeSettings.vmSettings.memory;
     }
+    if (runtimeSettings.vmSettings.disk_size !== undefined) {
+      options.rootfs = { size: runtimeSettings.vmSettings.disk_size };
+    }
     return options;
   }
 
@@ -559,6 +579,9 @@ export default function (pi: ExtensionAPI) {
     }
     if (runtimeSettings.vmSettings.memory !== undefined) {
       parts.push(`${runtimeSettings.vmSettings.memory} memory`);
+    }
+    if (runtimeSettings.vmSettings.disk_size !== undefined) {
+      parts.push(`${runtimeSettings.vmSettings.disk_size} root disk`);
     }
     return parts.length > 0 ? `, ${parts.join(", ")}` : "";
   }
@@ -770,6 +793,10 @@ export default function (pi: ExtensionAPI) {
     if (vmStarting) return vmStarting;
 
     vmStarting = (async () => {
+      const missingMountPaths = notifyMissingMountPaths(ctx);
+      if (missingMountPaths.length > 0) {
+        throw new Error(missingMountPaths.join("\n"));
+      }
       ctx?.ui.setStatus(
         "gondolin",
         ctx.ui.theme.fg(
@@ -1203,9 +1230,11 @@ export default function (pi: ExtensionAPI) {
   });
 
   // Run user `!` commands inside the VM too
-  pi.on("user_bash", (_event, ctx) => {
-    if (!vm) return;
-    return { operations: createGondolinBashOps(vm, localCwd) };
+  pi.on("user_bash", async (_event, ctx) => {
+    // Never let a missing/unavailable VM fall through to pi's host bash.
+    // This hook is used for `!` commands, including after session resume.
+    const activeVm = await ensureVm(ctx);
+    return { operations: createGondolinBashOps(activeVm, localCwd) };
   });
 
   // Replace the CWD line in the system prompt so the model sees the guest project path

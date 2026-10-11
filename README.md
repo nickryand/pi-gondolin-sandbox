@@ -69,7 +69,8 @@ Set `ssh` to `true` to enable SSH access to the guest VM. It defaults to `false`
   },
   "vm": {
     "cpus": 4,
-    "memory": "8G"
+    "memory": "8G",
+    "disk_size": "20G"
   },
   "commands": [
     {
@@ -146,7 +147,7 @@ Docker can be used instead of Podman by replacing `podman build` with `docker bu
 
 ### VM resources
 
-Set `vm.cpus` and `vm.memory` to configure the Gondolin virtual machine resources. `vm.cpus` must be a positive integer. `vm.memory` is a Gondolin/QEMU memory-size string such as `"512M"`, `"2G"`, or `"8G"`. Omit either setting to keep Gondolin's default. If the VM is already running, apply changes with `/gondolin reload`.
+Set `vm.cpus`, `vm.memory`, and `vm.disk_size` to configure the Gondolin virtual machine resources. `vm.cpus` must be a positive integer. `vm.memory` is a Gondolin/QEMU memory-size string such as `"512M"`, `"2G"`, or `"8G"`. `vm.disk_size` sets the minimum virtual root disk size (a positive byte count or size string such as `"20G"`); the guest image must include `resize2fs` for filesystem resizing. Omit any setting to keep Gondolin's default. If the VM is already running, apply changes with `/gondolin reload`.
 
 ### Additional mounts
 

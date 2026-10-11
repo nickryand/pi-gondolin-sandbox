@@ -37,6 +37,7 @@ fs.writeFileSync(
     ssh: true,
     mounts: {
       "/cache": "./.cache",
+      "/home": "~/shared-data",
       "/readonly": {
         path: "../shared-data",
         readOnly: true,
@@ -68,6 +69,7 @@ fs.writeFileSync(
     vm: {
       cpus: 4,
       memory: "8G",
+      disk_size: "20G",
     },
     commands: [
       { args: ["/usr/bin/hunk", "server"], log: true },
@@ -99,6 +101,7 @@ assert.equal(getGondolinfilePath(projectDir), path.join(projectDir, "Gondolinfil
 assert.deepEqual(mounts["/cache"], {
   path: path.join(projectDir, ".cache"),
 });
+assert.equal(mounts["/home"].path, path.join(os.homedir(), "shared-data"));
 
 assert.equal(mounts["/readonly"].path, path.resolve(projectDir, "../shared-data"));
 assert.equal(mounts["/readonly"].readOnly, true);
@@ -128,6 +131,7 @@ assert.deepEqual(settings.network, {
 assert.deepEqual(settings.vm, {
   cpus: 4,
   memory: "8G",
+  disk_size: "20G",
 });
 assert.deepEqual(settings.commands, [
   { args: ["/usr/bin/hunk", "server"], log: true },
@@ -161,6 +165,11 @@ for (const [name, settingsJson, message] of [
     "invalid-memory",
     { vm: { memory: 1024 } },
     'field "vm.memory" must be a non-empty string',
+  ],
+  [
+    "invalid-disk-size",
+    { vm: { disk_size: "0G" } },
+    'field "vm.disk_size" must be a positive byte count or size string',
   ],
   [
     "secrets-non-object",

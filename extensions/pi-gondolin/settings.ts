@@ -13,6 +13,7 @@
  */
 
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 
 export const GONDOLIN_SETTINGS_FILE = ".gondolin";
@@ -66,6 +67,7 @@ export interface GondolinCommandSettings {
 export interface GondolinVmSettings {
   cpus?: number;
   memory?: string;
+  disk_size?: string | number;
   [key: string]: unknown;
 }
 
@@ -91,6 +93,10 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 }
 
 function resolveProjectPath(projectDir: string, value: string): string {
+  if (value === "~") return os.homedir();
+  if (value.startsWith(`~${path.sep}`)) {
+    return path.resolve(os.homedir(), value.slice(2));
+  }
   return path.isAbsolute(value) ? value : path.resolve(projectDir, value);
 }
 
@@ -299,6 +305,19 @@ function normalizeVmSettings(
       );
     }
     normalized.memory = vm.memory;
+  }
+
+  if (vm.disk_size !== undefined) {
+    const validNumber = Number.isSafeInteger(vm.disk_size) && (vm.disk_size as number) > 0;
+    const validString =
+      typeof vm.disk_size === "string" &&
+      /^\s*[1-9]\d*\s*(?:bytes?|[kmgtpe](?:i?b)?)?\s*$/i.test(vm.disk_size);
+    if (!validNumber && !validString) {
+      throw new Error(
+        `${settingsPath} field "vm.disk_size" must be a positive byte count or size string`,
+      );
+    }
+    normalized.disk_size = vm.disk_size as string | number;
   }
 
   return normalized;
