@@ -62,6 +62,7 @@ export interface GondolinIngressSettings {
 export interface GondolinCommandSettings {
   args: string[];
   log?: boolean;
+  shutdown?: boolean;
 }
 
 export interface GondolinVmSettings {
@@ -284,9 +285,13 @@ function normalizeCommandSettings(
   if (command.log !== undefined && typeof command.log !== "boolean") {
     throw new Error(`${settingsPath} field "${field}.log" must be a boolean`);
   }
+  if (command.shutdown !== undefined && typeof command.shutdown !== "boolean") {
+    throw new Error(`${settingsPath} field "${field}.shutdown" must be a boolean`);
+  }
   return {
     args: command.args as string[],
     ...(command.log !== undefined ? { log: command.log as boolean } : {}),
+    ...(command.shutdown !== undefined ? { shutdown: command.shutdown as boolean } : {}),
   };
 }
 

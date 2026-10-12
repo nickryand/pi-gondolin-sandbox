@@ -74,6 +74,7 @@ fs.writeFileSync(
     commands: [
       { args: ["/usr/bin/hunk", "server"], log: true },
       { args: ["/usr/bin/agent"], log: false },
+      { args: ["/usr/bin/cleanup"], shutdown: true },
     ],
     secrets: {
       GITHUB_TOKEN: {
@@ -136,6 +137,7 @@ assert.deepEqual(settings.vm, {
 assert.deepEqual(settings.commands, [
   { args: ["/usr/bin/hunk", "server"], log: true },
   { args: ["/usr/bin/agent"], log: false },
+  { args: ["/usr/bin/cleanup"], shutdown: true },
 ]);
 assert.deepEqual(settings.network?.listeners, [
   { prefix: "/app", port: 3000 },
@@ -154,6 +156,7 @@ for (const [name, settingsJson, message] of [
   ["commands-entry-non-object", { commands: [false] }, 'commands\\[0\\]" must be an object'],
   ["commands-args-invalid", { commands: [{ args: "echo" }] }, 'commands\\[0\\]\\.args'],
   ["commands-log-invalid", { commands: [{ args: ["echo"], log: "yes" }] }, 'commands\\[0\\]\\.log" must be a boolean'],
+  ["commands-shutdown-invalid", { commands: [{ args: ["echo"], shutdown: "yes" }] }, 'commands\\[0\\]\\.shutdown" must be a boolean'],
   ["vm-non-object", { vm: false }, 'field "vm" must be an object'],
   ["ssh-non-boolean", { ssh: "yes" }, 'field "ssh" must be a boolean'],
   [

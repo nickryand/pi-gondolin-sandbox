@@ -868,8 +868,18 @@ export default function (pi: ExtensionAPI) {
           `Gondolin: running (${localCwd} -> ${guestProjectWorkspace})`,
         ),
       );
+      const configuredCommands = runtimeSettings.commands ?? [];
+      const executedCommands = configuredCommands.filter((command) => !command.shutdown);
+      const shutdownCommands = configuredCommands.filter((command) => command.shutdown);
+      const commandSummary = [
+        "Commands Executed:",
+        ...(executedCommands.length > 0 ? executedCommands.map((command) => `  \`${command.args.join(" ")}\``) : ["  (none)"]),
+        "",
+        "Shutdown Commands Registered:",
+        ...(shutdownCommands.length > 0 ? shutdownCommands.map((command) => `  \`${command.args.join(" ")}\``) : ["  (none)"]),
+      ].join("\n");
       ctx?.ui.notify(
-        `Gondolin VM ready. Host ${localCwd} mounted at ${guestProjectWorkspace}${formatVmResources()}${runtimeSettings.commands?.length ? `\nProcess started: ${runtimeSettings.commands.map((command) => command.args.join(" ")).join("; ")}` : ""}`,
+        `Gondolin VM ready. Host ${localCwd} mounted at ${guestProjectWorkspace}${formatVmResources()}\n${commandSummary}`,
         "info",
       );
       return created;
@@ -879,7 +889,7 @@ export default function (pi: ExtensionAPI) {
   }
 
   function startConfiguredCommands(activeVm: GondolinVM, ctx?: ExtensionContext) {
-    const commands = runtimeSettings.commands ?? [];
+    const commands = (runtimeSettings.commands ?? []).filter((command) => !command.shutdown);
     if (commands.length === 0) return;
     let log: RotatingCommandLog | null = null;
     if (commands.some((command) => command.log !== false)) {
@@ -905,8 +915,6 @@ export default function (pi: ExtensionAPI) {
       if (command.log !== false) {
         log!.write("process", Buffer.from(`launched: ${JSON.stringify(command.args)}`));
       }
-      ctx?.ui.notify(`Gondolin command started: ${command.args.join(" ")}`, "info");
-
       void (async () => {
         try {
           for await (const chunk of proc.output()) {
@@ -929,16 +937,30 @@ export default function (pi: ExtensionAPI) {
 
   async function stopVm(ctx?: ExtensionContext) {
     if (!vm) return;
+    const activeVm = vm;
     ctx?.ui.setStatus(
       "gondolin",
       ctx.ui.theme.fg("muted", "Gondolin: stopping"),
     );
+    const shutdownCommands = (runtimeSettings.commands ?? []).filter((command) => command.shutdown);
+    for (const command of shutdownCommands) {
+      try {
+        const proc = activeVm.exec(command.args, { stdout: "pipe", stderr: "pipe" });
+        const drainOutput = (async () => {
+          for await (const _chunk of proc.output()) { /* Drain output to allow completion. */ }
+        })();
+        const [result] = await Promise.all([proc.result, drainOutput]);
+        ctx?.ui.notify(`Gondolin shutdown command stopped (exit ${result.exitCode}): ${command.args.join(" ")}`, "info");
+      } catch (error) {
+        ctx?.ui.notify(`Gondolin shutdown command failed: ${String(error)}: ${command.args.join(" ")}`, "warning");
+      }
+    }
     try {
       await ingressAccess?.close();
       ingressAccess = null;
       await sshAccess?.close();
       sshAccess = null;
-      await vm.close();
+      await activeVm.close();
     } finally {
       ingressAccess = null;
       sshAccess = null;

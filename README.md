@@ -82,6 +82,10 @@ Set `ssh` to `true` to enable SSH access to the guest VM. It defaults to `false`
     {
       "args": ["/usr/bin/metrics-agent"],
       "log": false
+    },
+    {
+      "args": ["/usr/bin/cleanup"],
+      "shutdown": true
     }
   ],
   "mounts": {
@@ -117,7 +121,7 @@ Set `ssh` to `true` to enable SSH access to the guest VM. It defaults to `false`
 }
 ```
 
-Each entry in the `commands` array starts inside the guest after it boots and does not block pi. Its `args` is an argv array executed directly (not shell-parsed). Both output streams are piped and drained for every command. The `log` option defaults to `true`; set it to `false` to disable output and launch logging for that command. Logs include stream labels and timestamps. Logs rotate at 10 MiB, retaining up to five files (`command_1.log` through `command_5.log`), with `command_1.log` active. Pi is notified when each command starts and stops. Gondolin allows up to 64 concurrent or queued execs by default.
+Each entry in the `commands` array starts inside the guest after it boots and does not block pi. Its `args` is an argv array executed directly (not shell-parsed). Both output streams are piped and drained for every command. The `log` option defaults to `true`; set it to `false` to disable output and launch logging for that command. Logs include stream labels and timestamps. Logs rotate at 10 MiB, retaining up to five files (`command_1.log` through `command_5.log`), with `command_1.log` active. Pi is notified when each command starts and stops. Set `shutdown` to `true` to run that command only when the VM is stopping, while the guest is still available; use this for cleanup tasks. Shutdown commands run sequentially and are awaited before the VM closes. Gondolin allows up to 64 concurrent or queued execs by default.
 
 ### Image selection and builds
 
