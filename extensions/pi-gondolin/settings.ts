@@ -316,6 +316,11 @@ function normalizeVmSettings(
         `${settingsPath} field "vm.memory" must be a non-empty string`,
       );
     }
+    if (/^\s*\d+\s*[kmgtpe]b\s*$/i.test(vm.memory)) {
+      throw new Error(
+        `${settingsPath} field "vm.memory" uses an unsupported suffix; use QEMU units without "B" (for example, "4G" instead of "4GB")`,
+      );
+    }
     normalized.memory = vm.memory;
   }
 

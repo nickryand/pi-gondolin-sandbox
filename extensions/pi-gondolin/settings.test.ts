@@ -170,6 +170,11 @@ for (const [name, settingsJson, message] of [
     'field "vm.memory" must be a non-empty string',
   ],
   [
+    "memory-byte-suffix",
+    { vm: { memory: "4GB" } },
+    'field "vm.memory" uses an unsupported suffix.*4G.*4GB',
+  ],
+  [
     "invalid-disk-size",
     { vm: { disk_size: "0G" } },
     'field "vm.disk_size" must be a positive byte count or size string',
